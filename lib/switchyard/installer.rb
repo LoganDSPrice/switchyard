@@ -119,9 +119,11 @@ module Switchyard
           name: production
     YAML
 
-    def initialize(destination: Dir.pwd, runner: ProcessRunner.new)
+    def initialize(destination: Dir.pwd, runner: ProcessRunner.new, git_safe: false)
       @destination = destination
       @runner = runner
+      @git_safe = git_safe
+      @git_safe_enabled = false
     end
 
     def install!
@@ -129,13 +131,18 @@ module Switchyard
 
       generate_binstubs!
       generate_config!
+      enable_git_safe! if git_safe
 
       true
     end
 
+    def git_safe_enabled?
+      @git_safe_enabled
+    end
+
     private
 
-    attr_reader :destination, :runner
+    attr_reader :destination, :runner, :git_safe
 
     def validate_rails_directory!
       has_db_config = File.exist?(File.join(destination, "config", "database.yml"))
@@ -163,6 +170,14 @@ module Switchyard
       return if File.exist?(config_path)
 
       File.write(config_path, DEFAULT_CONFIG)
+    end
+
+    def enable_git_safe!
+      git_dir = File.join(destination, ".git")
+      return unless Dir.exist?(git_dir)
+
+      FileUtils.mkdir_p(File.join(git_dir, "safe"))
+      @git_safe_enabled = true
     end
   end
 end

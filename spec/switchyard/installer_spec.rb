@@ -39,6 +39,34 @@ RSpec.describe Switchyard::Installer do
         expect(File.exist?(config_path)).to be true
         expect(File.read(config_path)).to include("adapter: railway")
       end
+
+      context "when git_safe option is enabled" do
+        subject(:installer) { described_class.new(destination: temp_dir, runner: runner, git_safe: true) }
+
+        it "creates .git/safe if destination is a git repository" do
+          FileUtils.mkdir_p(File.join(temp_dir, ".git"))
+          installer.install!
+
+          expect(Dir.exist?(File.join(temp_dir, ".git", "safe"))).to be true
+          expect(installer.git_safe_enabled?).to be true
+        end
+
+        it "does not raise if destination is not a git repository" do
+          installer.install!
+
+          expect(installer.git_safe_enabled?).to be false
+        end
+      end
+
+      context "when git_safe option is disabled (default)" do
+        it "does not create .git/safe even if destination is a git repository" do
+          FileUtils.mkdir_p(File.join(temp_dir, ".git"))
+          installer.install!
+
+          expect(Dir.exist?(File.join(temp_dir, ".git", "safe"))).to be false
+          expect(installer.git_safe_enabled?).to be false
+        end
+      end
     end
 
     context "when destination is not a Rails directory" do

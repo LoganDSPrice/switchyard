@@ -62,14 +62,21 @@ module Switchyard
     end
 
     desc "install", "Generate binstubs and default configuration in a Rails project"
+    method_option :git_safe, type: :boolean, default: false, desc: "Create .git/safe to allow running binstubs without 'bin/' prefix"
     def install
-      Installer.new(destination: Dir.pwd).install!
+      installer = Installer.new(destination: Dir.pwd, git_safe: options[:git_safe])
+      installer.install!
       puts "✨ Switchyard installed successfully!"
       puts "Generated binstubs in bin/: dev, staging, production, pr"
       puts "Generated configuration: .switchyard.yml"
-      puts "\n💡 Quick Tip:"
-      puts "  Run commands via their project binstub (e.g. `bin/staging console`)."
-      puts "  If you use asdf and want to omit `bin/`, run `mkdir -p .git/safe` (if configured in PATH) or `asdf reshim ruby`."
+
+      if installer.git_safe_enabled?
+        puts "🔒 Enabled .git/safe! Local binstubs will supersede any global asdf shims if .git/safe/../../bin is in your PATH."
+      else
+        puts "\n💡 Quick Tip:"
+        puts "  Run commands via their project binstub (e.g. `bin/staging console`)."
+        puts "  To omit `bin/`, run `switchyard install --git-safe` or create `.git/safe` manually."
+      end
     end
 
     private

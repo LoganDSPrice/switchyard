@@ -67,6 +67,9 @@ module Switchyard
       puts "✨ Switchyard installed successfully!"
       puts "Generated binstubs in bin/: dev, staging, production, pr"
       puts "Generated configuration: .switchyard.yml"
+      puts "\n💡 Quick Tip:"
+      puts "  Run commands via their project binstub (e.g. `bin/staging console`)."
+      puts "  If you use asdf and want to omit `bin/`, run `mkdir -p .git/safe` (if configured in PATH) or `asdf reshim ruby`."
     end
 
     private

@@ -167,6 +167,56 @@ environments:
 
 ---
 
+## Troubleshooting & asdf Shim Conflicts
+
+### Error: `No version is set for command production` (or `staging` / `dev`)
+
+If you use **asdf** (or **rtx** / **mise**) as your version manager and type `production console` without the `bin/` prefix, you may encounter:
+
+```text
+No version is set for command production
+Consider adding one of the following versions in your config file at /path/.tool-versions:
+ruby 3.3.0
+...
+```
+
+#### Why does this happen?
+`asdf` intercepts all command invocations through global shims in `~/.asdf/shims/`. Whenever any gem executable (such as `parity` or `switchyard`) is installed into *any* Ruby version on your machine, `asdf` writes a persistent shim named `production`, `staging`, `dev`, etc. When you type `production`, `asdf` inspects your current directory's `.tool-versions`. If the currently active Ruby version doesn't have that gem installed globally, `asdf` halts execution.
+
+#### Resolution Options:
+
+##### Approach 1: Always use the project binstub (Standard & Recommended)
+Prefix the command with `bin/`:
+```bash
+bin/staging console
+bin/dev restore staging
+bin/production console
+```
+Because `switchyard install` places standalone binstubs in your repository's `bin/` folder, calling `bin/...` executes with your project's bundled Ruby and dependencies directly, bypassing `asdf` shims entirely.
+
+##### Approach 2: Enable Thoughtbot's `.git/safe` (Best for omitting `bin/`)
+If you want to type bare commands (`staging console`, `dev restore staging`) without prefixing `bin/`, you can configure your shell to automatically prioritize trusted local `bin/` directories.
+
+1. Ensure `.git/safe/../../bin` is in your shell's `$PATH` (typically in `~/.zshrc` or `~/.bashrc`):
+   ```bash
+   export PATH=".git/safe/../../bin:$PATH"
+   ```
+2. In your repository root, create the `.git/safe` trust marker:
+   ```bash
+   mkdir -p .git/safe
+   ```
+Because `.git/safe/../../bin` precedes `~/.asdf/shims` in your `$PATH`, your shell executes `./bin/production` directly before `asdf` can intercept it.
+
+##### Approach 3: Global Install & Reshim
+If you prefer global CLI access across projects:
+```bash
+gem install switchyard
+asdf reshim ruby
+```
+*(Note: If you switch between different Ruby versions in `.tool-versions`, you must run this inside each Ruby version where you want global shims available).*
+
+---
+
 ## License
 
 MIT License.

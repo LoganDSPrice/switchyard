@@ -74,4 +74,13 @@ RSpec.describe Switchyard::CLI do
       described_class.start(["pr", "123", "migrate"], config)
     end
   end
+
+  describe "#install" do
+    it "invokes the installer" do
+      installer_double = instance_double("Switchyard::Installer", install!: true)
+      expect(Switchyard::Installer).to receive(:new).and_return(installer_double)
+
+      described_class.start(["install"], config)
+    end
+  end
 end

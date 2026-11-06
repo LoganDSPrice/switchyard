@@ -61,6 +61,14 @@ module Switchyard
       end
     end
 
+    desc "install", "Generate binstubs and default configuration in a Rails project"
+    def install
+      Installer.new(destination: Dir.pwd).install!
+      puts "✨ Switchyard installed successfully!"
+      puts "Generated binstubs in bin/: dev, staging, production, pr"
+      puts "Generated configuration: .switchyard.yml"
+    end
+
     private
 
     def adapter

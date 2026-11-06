@@ -45,6 +45,12 @@ bundle install
 bundle exec switchyard install
 ```
 
+> **Tip:** If you use `asdf` and want to run commands without typing `bin/` (e.g. `staging console` instead of `bin/staging console`), pass the optional `--git-safe` flag:
+> ```bash
+> bundle exec switchyard install --git-safe
+> ```
+> This creates a local `.git/safe` directory, allowing local binstubs to **supersede** any conflicting global `asdf` shims (requires `.git/safe/../../bin` in your `$PATH`).
+
 This creates executable binstubs in your Rails app's `bin/`:
 - `bin/dev`
 - `bin/staging`
@@ -195,17 +201,19 @@ bin/production console
 Because `switchyard install` places standalone binstubs in your repository's `bin/` folder, calling `bin/...` executes with your project's bundled Ruby and dependencies directly, bypassing `asdf` shims entirely.
 
 ##### Approach 2: Enable Thoughtbot's `.git/safe` (Best for omitting `bin/`)
-If you want to type bare commands (`staging console`, `dev restore staging`) without prefixing `bin/`, you can configure your shell to automatically prioritize trusted local `bin/` directories.
+If you want to type bare commands (`staging console`, `dev restore staging`) without prefixing `bin/`, you can configure your shell to automatically prioritize trusted local `bin/` directories over `asdf` shims.
 
 1. Ensure `.git/safe/../../bin` is in your shell's `$PATH` (typically in `~/.zshrc` or `~/.bashrc`):
    ```bash
    export PATH=".git/safe/../../bin:$PATH"
    ```
-2. In your repository root, create the `.git/safe` trust marker:
+2. Enable it in your repository via the installer:
    ```bash
-   mkdir -p .git/safe
+   bundle exec switchyard install --git-safe
    ```
-Because `.git/safe/../../bin` precedes `~/.asdf/shims` in your `$PATH`, your shell executes `./bin/production` directly before `asdf` can intercept it.
+   *(Or manually create the trust marker: `mkdir -p .git/safe`)*.
+
+Because `.git/safe/../../bin` precedes `~/.asdf/shims` in your `$PATH`, your shell finds and executes `./bin/production` directly. **This supersedes any conflicting global `asdf` shims** from older Ruby versions.
 
 ##### Approach 3: Global Install & Reshim
 If you prefer global CLI access across projects:

@@ -1,0 +1,25 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup" if File.exist?(File.expand_path("../Gemfile", __dir__))
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+require "switchyard"
+
+subcommand = ARGV.first || "console"
+args = ARGV.drop(1)
+
+case subcommand
+when "console"
+  Switchyard::CLI.start(["console", "production"] + args)
+when "logs", "tail"
+  Switchyard::CLI.start(["logs", "production"] + args)
+when "migrate"
+  Switchyard::CLI.start(["migrate", "production"] + args)
+when "restore", "restore-from"
+  from = args.first || "staging"
+  Switchyard::CLI.start(["restore", from, "production"] + args.drop(1))
+when "help", "--help", "-h"
+  puts "Usage: production [console|logs|migrate|restore <from>]"
+else
+  Switchyard::CLI.start([subcommand, "production"] + args)
+end

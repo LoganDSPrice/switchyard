@@ -91,7 +91,9 @@ module Switchyard
     PR_SUBCOMMANDS = %w[deploy console logs migrate restore list].freeze
 
     desc "pr [NUMBER] [COMMAND]", "Execute a command against a PR preview environment"
-    method_option :seed, type: :string, lazy_default: "staging", desc: "Seed database from environment (default: staging) after deployment"
+    method_option :seed, type: :boolean, default: false, desc: "Run Rails db:seed on the review app instead of copying remote database"
+    method_option :copy, type: :string, lazy_default: "auto", desc: "Copy remote database from environment (default: auto, using staging/production)"
+    method_option :skip_db, type: :boolean, default: false, desc: "Skip database copying/seeding on deploy"
     method_option :service, type: :string, desc: "Railway service to connect and deploy"
     def pr(identifier = nil, subcommand = nil, *args)
       if PR_SUBCOMMANDS.include?(identifier)
@@ -134,11 +136,7 @@ module Switchyard
         )
         say "✨ Connected and triggered deployment on Railway!"
 
-        if options[:seed]
-          source_env = options[:seed] == "seed" ? "staging" : options[:seed]
-          say "🌱 Seeding #{env} database from #{source_env}..."
-          restore(source_env, env)
-        end
+        handle_pr_database!(env)
 
         say
         say "Next steps:"
@@ -220,6 +218,30 @@ module Switchyard
 
     def github
       @custom_config[:github] || GitHub.new
+    end
+
+    def switchyard_config
+      @custom_config[:switchyard_config] || Config.new
+    end
+
+    def handle_pr_database!(env)
+      return if options[:skip_db] || switchyard_config.pr_database_strategy == "none"
+
+      if options[:seed] || switchyard_config.pr_database_strategy == "seed"
+        say "🌱 Seeding database for #{env} via bin/rails db:seed..."
+        adapter.seed(env)
+      else
+        source = if options[:copy] && options[:copy] != "auto"
+                   options[:copy]
+                 elsif switchyard_config.pr_default_db_source != "auto"
+                   switchyard_config.pr_default_db_source
+                 else
+                   adapter.resolve_base_environment
+                 end
+
+        say "🌱 Copying database from #{source} into #{env}..."
+        restore(source, env)
+      end
     end
   end
 end

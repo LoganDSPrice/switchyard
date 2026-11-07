@@ -6,10 +6,11 @@ require "switchyard/cli"
 RSpec.describe Switchyard::CLI do
   subject(:cli) { described_class.new([], {}, config) }
 
-  let(:config) { { adapter: adapter, db_config: db_config, github: github } }
+  let(:config) { { adapter: adapter, db_config: db_config, github: github, switchyard_config: switchyard_config } }
   let(:adapter) { instance_double("Switchyard::Adapters::Railway") }
   let(:db_config) { instance_double("Switchyard::DatabaseConfig") }
   let(:github) { instance_double("Switchyard::GitHub") }
+  let(:switchyard_config) { instance_double("Switchyard::Config", pr_database_strategy: "copy", pr_default_db_source: "auto") }
 
   def capture_stdout
     original_stdout = $stdout
@@ -125,7 +126,7 @@ RSpec.describe Switchyard::CLI do
         }
       end
 
-      it "deploys a specified PR number from GitHub" do
+      it "deploys from GitHub and copies database by default from resolved base environment" do
         expect(github).to receive(:pr_info).with("157").and_return(pr_payload)
         expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
         expect(adapter).to receive(:deploy_pr).with(
@@ -135,12 +136,24 @@ RSpec.describe Switchyard::CLI do
           service: nil
         )
 
+        expect(adapter).to receive(:resolve_base_environment).and_return("staging")
+        expect(adapter).to receive(:database_url).with("staging").and_return("postgresql://user:pass@host/remote")
+        expect(db_config).to receive(:database_name).with("pr-157").and_return("myapp_pr_157")
+        sync_double = instance_double("Switchyard::Database::Sync", run!: true)
+        expect(Switchyard::Database::Sync).to receive(:new).with(
+          source_url: "postgresql://user:pass@host/remote",
+          target_db: "myapp_pr_157",
+          target_env: "pr-157",
+          force: false
+        ).and_return(sync_double)
+
         output = capture_stdout do
           described_class.start(["pr", "157", "deploy"], config)
         end
 
         expect(output).to include("Deploying PR #157 (test/preview-app-banner) to pr-157 on Railway from GitHub...")
         expect(output).to include("Connected and triggered deployment on Railway!")
+        expect(output).to include("Copying database from staging into pr-157...")
       end
 
       it "auto-detects PR details from GitHub when called as 'pr deploy'" do
@@ -154,25 +167,8 @@ RSpec.describe Switchyard::CLI do
           service: nil
         )
 
-        output = capture_stdout do
-          described_class.start(["pr", "deploy"], config)
-        end
-
-        expect(output).to include("Deploying PR #157")
-      end
-
-      it "seeds the database from staging when --seed flag is provided" do
-        expect(github).to receive(:pr_info).with("157").and_return(pr_payload)
-        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
-        expect(adapter).to receive(:deploy_pr).with(
-          "pr-157",
-          repo: "LoganDSPrice/NBA-Over-Under-Redux",
-          branch: "test/preview-app-banner",
-          service: nil
-        )
-
-        # restore expectations
-        expect(adapter).to receive(:database_url).with("staging").and_return("postgresql://user:pass@host/remote")
+        expect(adapter).to receive(:resolve_base_environment).and_return("production")
+        expect(adapter).to receive(:database_url).with("production").and_return("postgresql://user:pass@host/remote")
         expect(db_config).to receive(:database_name).with("pr-157").and_return("myapp_pr_157")
         sync_double = instance_double("Switchyard::Database::Sync", run!: true)
         expect(Switchyard::Database::Sync).to receive(:new).with(
@@ -183,10 +179,79 @@ RSpec.describe Switchyard::CLI do
         ).and_return(sync_double)
 
         output = capture_stdout do
+          described_class.start(["pr", "deploy"], config)
+        end
+
+        expect(output).to include("Deploying PR #157")
+        expect(output).to include("Copying database from production into pr-157...")
+      end
+
+      it "runs db:seed instead of copying when --seed flag is provided" do
+        expect(github).to receive(:pr_info).with("157").and_return(pr_payload)
+        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
+        expect(adapter).to receive(:deploy_pr).with(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          service: nil
+        )
+
+        expect(adapter).to receive(:seed).with("pr-157")
+        expect(Switchyard::Database::Sync).not_to receive(:new)
+
+        output = capture_stdout do
           described_class.start(["pr", "157", "deploy", "--seed"], config)
         end
 
-        expect(output).to include("Seeding pr-157 database from staging...")
+        expect(output).to include("Seeding database for pr-157 via bin/rails db:seed...")
+      end
+
+      it "skips database copying when --skip-db flag is provided" do
+        expect(github).to receive(:pr_info).with("157").and_return(pr_payload)
+        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
+        expect(adapter).to receive(:deploy_pr).with(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          service: nil
+        )
+
+        expect(adapter).not_to receive(:seed)
+        expect(Switchyard::Database::Sync).not_to receive(:new)
+
+        output = capture_stdout do
+          described_class.start(["pr", "157", "deploy", "--skip-db"], config)
+        end
+
+        expect(output).not_to include("Copying database")
+        expect(output).not_to include("Seeding database")
+      end
+
+      it "copies from custom environment when --copy is provided" do
+        expect(github).to receive(:pr_info).with("157").and_return(pr_payload)
+        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
+        expect(adapter).to receive(:deploy_pr).with(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          service: nil
+        )
+
+        expect(adapter).to receive(:database_url).with("production").and_return("postgresql://user:pass@host/remote")
+        expect(db_config).to receive(:database_name).with("pr-157").and_return("myapp_pr_157")
+        sync_double = instance_double("Switchyard::Database::Sync", run!: true)
+        expect(Switchyard::Database::Sync).to receive(:new).with(
+          source_url: "postgresql://user:pass@host/remote",
+          target_db: "myapp_pr_157",
+          target_env: "pr-157",
+          force: false
+        ).and_return(sync_double)
+
+        output = capture_stdout do
+          described_class.start(["pr", "157", "deploy", "--copy", "production"], config)
+        end
+
+        expect(output).to include("Copying database from production into pr-157...")
       end
     end
   end

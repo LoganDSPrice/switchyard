@@ -124,6 +124,13 @@ module Switchyard
           name: staging
         production:
           name: production
+
+      pr:
+        # Strategy on deploy: 'copy' (default: clones staging/production DB),
+        # 'seed' (runs bin/rails db:seed), or 'none' (leaves database blank)
+        database_strategy: copy
+        # Source to copy from (default: auto, falls back from staging to production)
+        default_db_source: auto
     YAML
 
     GITHUB_ACTION_TEMPLATE = <<~YAML

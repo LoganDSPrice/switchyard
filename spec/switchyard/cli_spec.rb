@@ -140,5 +140,37 @@ RSpec.describe Switchyard::CLI do
       expect(output).to include("restore [FROM] [TO]")
       expect(output).to include("--force")
     end
+
+    it "includes INSTALLATION OPTIONS in the main help output" do
+      output = capture_stdout do
+        described_class.start(["help"], config)
+      end
+
+      expect(output).to include("INSTALLATION OPTIONS")
+      expect(output).to include("--git-safe")
+      expect(output).to include("--github-action")
+    end
+
+    it "routes '<command> --help' to command-specific help" do
+      output = capture_stdout do
+        described_class.start(["install", "--help"], config)
+      end
+
+      expect(output).to include("Usage:")
+      expect(output).to match(/install/)
+      expect(output).to include("--git-safe")
+      expect(output).to include("--github-action")
+    end
+
+    it "routes '<command> -h' to command-specific help" do
+      output = capture_stdout do
+        described_class.start(["install", "-h"], config)
+      end
+
+      expect(output).to include("Usage:")
+      expect(output).to match(/install/)
+      expect(output).to include("--git-safe")
+      expect(output).to include("--github-action")
+    end
   end
 end

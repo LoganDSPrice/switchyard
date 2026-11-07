@@ -8,6 +8,17 @@ module Switchyard
       true
     end
 
+    def self.start(given_args = ARGV, config = {})
+      if given_args.is_a?(Array) && given_args.size >= 2
+        help_idx = given_args.index { |arg| arg == "--help" || arg == "-h" }
+        if help_idx && help_idx.positive?
+          command = given_args.first
+          return super(["help", command], config)
+        end
+      end
+      super
+    end
+
     def self.help(shell, subcommand = false)
       list = printable_commands(true, subcommand)
       Thor::Util.thor_classes_in(self).each do |klass|
@@ -24,6 +35,11 @@ module Switchyard
       shell.say
       shell.say "CORE COMMANDS:"
       shell.print_table(list, indent: 2, truncate: true)
+      shell.say
+      shell.say "INSTALLATION OPTIONS:"
+      shell.say "  switchyard install [--git-safe] [--github-action]"
+      shell.say "    --git-safe       Create .git/safe so binstubs run without `bin/` prefix"
+      shell.say "    --github-action  Generate GitHub Action workflow to auto-cleanup PR review apps on Railway"
       shell.say
       shell.say "BINSTUB SHORTCUTS (Recommended):"
       shell.say "  dev restore <from>                # e.g. `dev restore staging` (pulls remote DB into local dev)"

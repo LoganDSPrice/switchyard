@@ -145,14 +145,20 @@ pr 142 restore staging
 Deploy and interact with dynamic preview environments on Railway directly from GitHub pull requests:
 
 ```bash
-# Deploy a review app on Railway directly from GitHub branch:
+# Deploy review app on Railway (copies DB from staging/production by default):
 pr 142 deploy
 
-# Auto-detect the current branch's PR and deploy:
+# Auto-detect current branch's PR and deploy:
 pr deploy
 
-# Deploy and immediately seed database from staging:
+# Deploy and run Rails db:seed instead of copying remote database:
 pr 142 deploy --seed
+
+# Deploy and explicitly copy from a specific environment:
+pr 142 deploy --copy production
+
+# Deploy without database copying or seeding:
+pr 142 deploy --skip-db
 
 # Open rails console on PR #142:
 pr 142 console
@@ -163,7 +169,7 @@ pr 142 logs
 # Run migrations on PR #142:
 pr 142 migrate
 
-# Seed or refresh PR #142 database from staging:
+# Refresh or re-seed PR #142 database from staging:
 pr 142 restore staging
 ```
 
@@ -182,6 +188,16 @@ environments:
     name: staging
   production:
     name: production
+
+pr:
+  # Database strategy on deploy:
+  # 'copy' (default: clones staging or production DB)
+  # 'seed' (runs bin/rails db:seed)
+  # 'none' (skips database setup)
+  database_strategy: copy
+
+  # Source environment to copy from (default: 'auto', which checks staging first, then production)
+  default_db_source: auto
 ```
 
 ---

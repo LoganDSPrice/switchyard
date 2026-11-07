@@ -131,8 +131,9 @@ module Switchyard
         end
         puts "      • Name suggestion: 'GitHub Actions - PR Cleanup' (Project Token)"
         if (secrets_url = installer.github_secrets_url)
-          puts "   2. On GitHub: Add the secret directly at:"
+          puts "   2. On GitHub: Add the secret at:"
           puts "      👉 #{secrets_url}"
+          puts "      • Click 'New repository secret'"
         else
           puts "   2. On GitHub: Settings → Secrets and variables → Actions → New repository secret"
         end

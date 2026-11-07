@@ -106,7 +106,7 @@ RSpec.describe Switchyard::CLI do
         git_safe_enabled?: false,
         github_action_generated?: true,
         railway_tokens_url: "https://railway.com/project/proj-123/settings/tokens?environmentId=env-456",
-        github_secrets_url: "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions/new"
+        github_secrets_url: "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions"
       )
       expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false, github_action: true).and_return(installer_double)
 
@@ -115,7 +115,8 @@ RSpec.describe Switchyard::CLI do
       end
 
       expect(output).to include("https://railway.com/project/proj-123/settings/tokens?environmentId=env-456")
-      expect(output).to include("https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions/new")
+      expect(output).to include("https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions")
+      expect(output).to include("Click 'New repository secret'")
     end
   end
 

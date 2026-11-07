@@ -185,7 +185,7 @@ module Switchyard
       match = stdout.strip.match(/(?:github\.com[:\/])(?<owner>[\w\-]+)\/(?<repo>[\w\-\.]+?)(?:\.git)?\z/)
       return unless match
 
-      "https://github.com/#{match[:owner]}/#{match[:repo]}/settings/secrets/actions/new"
+      "https://github.com/#{match[:owner]}/#{match[:repo]}/settings/secrets/actions"
     end
 
     def railway_tokens_url

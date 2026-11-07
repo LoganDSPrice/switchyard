@@ -101,7 +101,7 @@ RSpec.describe Switchyard::Installer do
           ).and_return(["git@github.com:LoganDSPrice/NBA-Over-Under-Redux.git\n", double(success?: true)])
 
           expect(installer.github_secrets_url).to eq(
-            "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions/new"
+            "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions"
           )
         end
       end
@@ -113,7 +113,7 @@ RSpec.describe Switchyard::Installer do
           ).and_return(["https://github.com/LoganDSPrice/NBA-Over-Under-Redux.git\n", double(success?: true)])
 
           expect(installer.github_secrets_url).to eq(
-            "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions/new"
+            "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions"
           )
         end
       end

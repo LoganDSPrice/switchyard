@@ -26,4 +26,28 @@ Gem::Specification.new do |spec|
 
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rspec", "~> 3.12"
+
+  spec.post_install_message = <<~MSG
+
+    ========================================================================
+    🚂 Thanks for installing Switchyard!
+
+    To generate project binstubs (dev, staging, production, pr), run:
+      bundle exec switchyard install
+
+    Available setup options:
+      --git-safe       Enable .git/safe so you can run `staging console`
+                       directly without typing `bin/` or `bundle exec`.
+      --github-action  Generate a GitHub Action to auto-decommission review
+                       apps on Railway when PRs are closed or merged.
+
+    Finding your RAILWAY_TOKEN (for automated cleanup):
+      1. On Railway: Project Settings → Tokens → New Token (Project Token)
+      2. On GitHub:  Settings → Secrets and variables → Actions → New repository secret (RAILWAY_TOKEN)
+
+    For full help and commands:
+      bundle exec switchyard help
+    ========================================================================
+
+  MSG
 end

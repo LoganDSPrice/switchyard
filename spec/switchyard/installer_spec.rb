@@ -67,6 +67,30 @@ RSpec.describe Switchyard::Installer do
           expect(installer.git_safe_enabled?).to be false
         end
       end
+
+      context "when github_action option is enabled" do
+        subject(:installer) { described_class.new(destination: temp_dir, runner: runner, github_action: true) }
+
+        it "creates .github/workflows/switchyard-cleanup-pr.yml" do
+          installer.install!
+
+          workflow_path = File.join(temp_dir, ".github", "workflows", "switchyard-cleanup-pr.yml")
+          expect(File.exist?(workflow_path)).to be true
+          expect(File.read(workflow_path)).to include("Switchyard Cleanup PR Environment")
+          expect(File.read(workflow_path)).to include("railway environment delete")
+          expect(installer.github_action_generated?).to be true
+        end
+      end
+
+      context "when github_action option is disabled (default)" do
+        it "does not create the workflow file" do
+          installer.install!
+
+          workflow_path = File.join(temp_dir, ".github", "workflows", "switchyard-cleanup-pr.yml")
+          expect(File.exist?(workflow_path)).to be false
+          expect(installer.github_action_generated?).to be false
+        end
+      end
     end
 
     context "when destination is not a Rails directory" do

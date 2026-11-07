@@ -129,11 +129,33 @@ module Switchyard
           name: production
     YAML
 
-    def initialize(destination: Dir.pwd, runner: ProcessRunner.new, git_safe: false)
+    GITHUB_ACTION_TEMPLATE = <<~YAML
+      name: Switchyard Cleanup PR Environment
+
+      on:
+        pull_request:
+          types: [closed]
+
+      jobs:
+        cleanup:
+          runs-on: ubuntu-latest
+          steps:
+            - name: Install Railway CLI
+              run: npm i -g @railway/cli
+
+            - name: Decommission Railway PR Environment
+              env:
+                RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+              run: railway environment delete "pr-${{ github.event.pull_request.number }}" --yes
+    YAML
+
+    def initialize(destination: Dir.pwd, runner: ProcessRunner.new, git_safe: false, github_action: false)
       @destination = destination
       @runner = runner
       @git_safe = git_safe
+      @github_action = github_action
       @git_safe_enabled = false
+      @github_action_generated = false
     end
 
     def install!
@@ -142,6 +164,7 @@ module Switchyard
       generate_binstubs!
       generate_config!
       enable_git_safe! if git_safe
+      generate_github_action! if github_action
 
       true
     end
@@ -150,9 +173,13 @@ module Switchyard
       @git_safe_enabled
     end
 
+    def github_action_generated?
+      @github_action_generated
+    end
+
     private
 
-    attr_reader :destination, :runner, :git_safe
+    attr_reader :destination, :runner, :git_safe, :github_action
 
     def validate_rails_directory!
       has_db_config = File.exist?(File.join(destination, "config", "database.yml"))
@@ -188,6 +215,14 @@ module Switchyard
 
       FileUtils.mkdir_p(File.join(git_dir, "safe"))
       @git_safe_enabled = true
+    end
+
+    def generate_github_action!
+      workflows_dir = File.join(destination, ".github", "workflows")
+      FileUtils.mkdir_p(workflows_dir)
+
+      File.write(File.join(workflows_dir, "switchyard-cleanup-pr.yml"), GITHUB_ACTION_TEMPLATE)
+      @github_action_generated = true
     end
   end
 end

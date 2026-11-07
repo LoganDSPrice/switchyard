@@ -92,12 +92,22 @@ module Switchyard
 
     desc "install", "Generate binstubs and default configuration in a Rails project"
     method_option :git_safe, type: :boolean, default: false, desc: "Create .git/safe to allow running binstubs without 'bin/' prefix"
+    method_option :github_action, type: :boolean, default: false, desc: "Generate GitHub Action workflow to auto-decommission PR review apps when closed"
     def install
-      installer = Installer.new(destination: Dir.pwd, git_safe: options[:git_safe])
+      installer = Installer.new(
+        destination: Dir.pwd,
+        git_safe: options[:git_safe],
+        github_action: options[:github_action]
+      )
       installer.install!
       puts "✨ Switchyard installed successfully!"
       puts "Generated binstubs in bin/: switchyard, dev, staging, production, pr"
       puts "Generated configuration: .switchyard.yml"
+
+      if installer.github_action_generated?
+        puts "🤖 Generated .github/workflows/switchyard-cleanup-pr.yml!"
+        puts "   To enable: Add your RAILWAY_TOKEN as a secret in your GitHub repo (Settings → Secrets → Actions)."
+      end
 
       if installer.git_safe_enabled?
         puts "🔒 Enabled .git/safe! Local binstubs will supersede any global asdf shims if .git/safe/../../bin is in your PATH."

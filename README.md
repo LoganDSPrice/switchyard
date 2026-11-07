@@ -51,6 +51,12 @@ bundle exec switchyard install
 > ```
 > This creates a local `.git/safe` directory, allowing local binstubs to **supersede** any conflicting global `asdf` shims (requires `.git/safe/../../bin` in your `$PATH`).
 
+> **Automated PR Cleanup:** To generate a GitHub Action workflow that automatically decommissions review app environments on Railway when a PR is closed or merged:
+> ```bash
+> bundle exec switchyard install --github-action
+> ```
+> This creates `.github/workflows/switchyard-cleanup-pr.yml`. (Requires adding your `RAILWAY_TOKEN` to your repo's GitHub Secrets!).
+
 This creates executable binstubs in your Rails app's `bin/`:
 - `bin/switchyard`
 - `bin/dev`

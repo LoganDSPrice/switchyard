@@ -76,18 +76,25 @@ RSpec.describe Switchyard::CLI do
   end
 
   describe "#install" do
-    it "invokes the installer with git_safe: false by default" do
-      installer_double = instance_double("Switchyard::Installer", install!: true, git_safe_enabled?: false)
-      expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false).and_return(installer_double)
+    it "invokes the installer with git_safe: false and github_action: false by default" do
+      installer_double = instance_double("Switchyard::Installer", install!: true, git_safe_enabled?: false, github_action_generated?: false)
+      expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false, github_action: false).and_return(installer_double)
 
       described_class.start(["install"], config)
     end
 
     it "passes git_safe: true when --git-safe flag is supplied" do
-      installer_double = instance_double("Switchyard::Installer", install!: true, git_safe_enabled?: true)
-      expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: true).and_return(installer_double)
+      installer_double = instance_double("Switchyard::Installer", install!: true, git_safe_enabled?: true, github_action_generated?: false)
+      expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: true, github_action: false).and_return(installer_double)
 
       described_class.start(["install", "--git-safe"], config)
+    end
+
+    it "passes github_action: true when --github-action flag is supplied" do
+      installer_double = instance_double("Switchyard::Installer", install!: true, git_safe_enabled?: false, github_action_generated?: true)
+      expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false, github_action: true).and_return(installer_double)
+
+      described_class.start(["install", "--github-action"], config)
     end
   end
 

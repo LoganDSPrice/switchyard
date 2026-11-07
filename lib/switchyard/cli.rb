@@ -47,6 +47,7 @@ module Switchyard
       shell.say "  production console                # Opens remote Rails console on production via SSH"
       shell.say "  staging logs                      # Streams real-time logs"
       shell.say "  staging migrate                   # Runs remote database migrations via SSH"
+      shell.say "  pr [number] deploy                # Deploys PR review app directly from GitHub branch"
       shell.say "  pr <number> console               # e.g. `pr 142 console` (console in PR preview app)"
       shell.say "  pr <number> restore <from>        # e.g. `pr 142 restore staging` (seeds PR database from staging)"
       shell.say
@@ -83,26 +84,62 @@ module Switchyard
         source_url: source_url,
         target_db: target_db,
         target_env: to,
-        force: options[:force]
+        force: options[:force] || false
       ).run!
     end
 
     desc "pr [NUMBER] [COMMAND]", "Execute a command against a PR preview environment"
-    def pr(identifier, subcommand = "console", *args)
-      env = adapter.resolve_pr_environment(identifier)
+    method_option :seed, type: :string, lazy_default: "staging", desc: "Seed database from environment (default: staging) after deployment"
+    method_option :service, type: :string, desc: "Railway service to connect and deploy"
+    def pr(identifier = nil, subcommand = "console", *args)
+      if identifier == "deploy"
+        subcommand = "deploy"
+        identifier = nil
+      end
 
-      case subcommand
-      when "console"
-        console(env, *args)
-      when "logs"
-        logs(env, *args)
-      when "migrate"
-        migrate(env, *args)
-      when "restore"
-        source_env = args.first || "staging"
-        restore(source_env, env)
+      if subcommand == "deploy"
+        info = github.pr_info(identifier)
+        pr_number = info[:number]
+        env = adapter.resolve_pr_environment(pr_number)
+
+        say "🚀 Deploying PR ##{pr_number} (#{info[:branch]}) to #{env} on Railway from GitHub..."
+        adapter.deploy_pr(
+          env,
+          repo: info[:repo],
+          branch: info[:branch],
+          service: options[:service]
+        )
+        say "✨ Connected and triggered deployment on Railway!"
+
+        if options[:seed]
+          source_env = options[:seed] == "seed" ? "staging" : options[:seed]
+          say "🌱 Seeding #{env} database from #{source_env}..."
+          restore(source_env, env)
+        end
+
+        say
+        say "Next steps:"
+        say "  bin/pr #{pr_number} logs       # Stream build/deploy and application logs"
+        say "  bin/pr #{pr_number} console    # Open remote Rails console"
+        say "  bin/pr #{pr_number} migrate    # Run remote migrations"
       else
-        raise Error, "Unknown PR subcommand: #{subcommand}"
+        raise Error, "PR number required for #{subcommand}" unless identifier
+
+        env = adapter.resolve_pr_environment(identifier)
+
+        case subcommand
+        when "console"
+          console(env, *args)
+        when "logs"
+          logs(env, *args)
+        when "migrate"
+          migrate(env, *args)
+        when "restore"
+          source_env = args.first || "staging"
+          restore(source_env, env)
+        else
+          raise Error, "Unknown PR subcommand: #{subcommand}"
+        end
       end
     end
 
@@ -158,6 +195,10 @@ module Switchyard
 
     def db_config
       @custom_config[:db_config] || DatabaseConfig.new
+    end
+
+    def github
+      @custom_config[:github] || GitHub.new
     end
   end
 end

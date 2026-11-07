@@ -105,16 +105,20 @@ module Switchyard
         require "bundler/setup"
         require "switchyard"
 
-        if ARGV.empty? || ARGV.first =~ /\\A(-h|--help|help)\\z/
-          puts "Usage: pr <number> [console|logs|migrate|restore <from>]"
+        if ARGV.first =~ /\\A(-h|--help|help)\\z/
+          puts "Usage: pr [number] [deploy|console|logs|migrate|restore <from>]"
           exit 0
         end
 
-        identifier = ARGV.first
-        subcommand = ARGV[1] || "console"
-        args = ARGV.drop(2)
+        if ARGV.empty? || ARGV.first == "deploy"
+          Switchyard::CLI.start(["pr", "deploy"] + ARGV.drop(1))
+        else
+          identifier = ARGV.first
+          subcommand = ARGV[1] || "console"
+          args = ARGV.drop(2)
 
-        Switchyard::CLI.start(["pr", identifier, subcommand] + args)
+          Switchyard::CLI.start(["pr", identifier, subcommand] + args)
+        end
       RUBY
     }.freeze
 

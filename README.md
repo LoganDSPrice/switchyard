@@ -142,19 +142,28 @@ pr 142 restore staging
 5. `ar_internal_metadata` is updated to set `environment = 'development'`.
 
 ### PR / Review App Preview Environments
-Railway generates dynamic environments for pull requests (e.g. `pr-142`). Switchyard handles them seamlessly:
+Deploy and interact with dynamic preview environments on Railway directly from GitHub pull requests:
 
 ```bash
+# Deploy a review app on Railway directly from GitHub branch:
+pr 142 deploy
+
+# Auto-detect the current branch's PR and deploy:
+pr deploy
+
+# Deploy and immediately seed database from staging:
+pr 142 deploy --seed
+
 # Open rails console on PR #142:
 pr 142 console
 
-# View logs for PR #142:
+# View real-time logs for PR #142:
 pr 142 logs
 
 # Run migrations on PR #142:
 pr 142 migrate
 
-# Seed PR #142 database from staging:
+# Seed or refresh PR #142 database from staging:
 pr 142 restore staging
 ```
 

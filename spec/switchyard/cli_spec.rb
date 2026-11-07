@@ -6,9 +6,10 @@ require "switchyard/cli"
 RSpec.describe Switchyard::CLI do
   subject(:cli) { described_class.new([], {}, config) }
 
-  let(:config) { { adapter: adapter, db_config: db_config } }
+  let(:config) { { adapter: adapter, db_config: db_config, github: github } }
   let(:adapter) { instance_double("Switchyard::Adapters::Railway") }
   let(:db_config) { instance_double("Switchyard::DatabaseConfig") }
+  let(:github) { instance_double("Switchyard::GitHub") }
 
   def capture_stdout
     original_stdout = $stdout
@@ -81,6 +82,79 @@ RSpec.describe Switchyard::CLI do
       expect(adapter).to receive(:migrate).with("pr-123")
 
       described_class.start(["pr", "123", "migrate"], config)
+    end
+
+    describe "deploy subcommand" do
+      let(:pr_payload) do
+        {
+          number: 157,
+          branch: "test/preview-app-banner",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux"
+        }
+      end
+
+      it "deploys a specified PR number from GitHub" do
+        expect(github).to receive(:pr_info).with("157").and_return(pr_payload)
+        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
+        expect(adapter).to receive(:deploy_pr).with(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          service: nil
+        )
+
+        output = capture_stdout do
+          described_class.start(["pr", "157", "deploy"], config)
+        end
+
+        expect(output).to include("Deploying PR #157 (test/preview-app-banner) to pr-157 on Railway from GitHub...")
+        expect(output).to include("Connected and triggered deployment on Railway!")
+      end
+
+      it "auto-detects PR details from GitHub when called as 'pr deploy'" do
+        expect(github).to receive(:pr_info).with(nil).and_return(pr_payload)
+        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
+        expect(adapter).to receive(:deploy_pr).with(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          service: nil
+        )
+
+        output = capture_stdout do
+          described_class.start(["pr", "deploy"], config)
+        end
+
+        expect(output).to include("Deploying PR #157")
+      end
+
+      it "seeds the database from staging when --seed flag is provided" do
+        expect(github).to receive(:pr_info).with("157").and_return(pr_payload)
+        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
+        expect(adapter).to receive(:deploy_pr).with(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          service: nil
+        )
+
+        # restore expectations
+        expect(adapter).to receive(:database_url).with("staging").and_return("postgresql://user:pass@host/remote")
+        expect(db_config).to receive(:database_name).with("pr-157").and_return("myapp_pr_157")
+        sync_double = instance_double("Switchyard::Database::Sync", run!: true)
+        expect(Switchyard::Database::Sync).to receive(:new).with(
+          source_url: "postgresql://user:pass@host/remote",
+          target_db: "myapp_pr_157",
+          target_env: "pr-157",
+          force: false
+        ).and_return(sync_double)
+
+        output = capture_stdout do
+          described_class.start(["pr", "157", "deploy", "--seed"], config)
+        end
+
+        expect(output).to include("Seeding pr-157 database from staging...")
+      end
     end
   end
 

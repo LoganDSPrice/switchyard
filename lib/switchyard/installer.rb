@@ -177,6 +177,16 @@ module Switchyard
       @github_action_generated
     end
 
+    def github_secrets_url
+      stdout, status = runner.capture("git", "remote", "get-url", "origin")
+      return unless status&.success?
+
+      match = stdout.strip.match(/(?:github\.com[:\/])(?<owner>[\w\-]+)\/(?<repo>[\w\-\.]+?)(?:\.git)?\z/)
+      return unless match
+
+      "https://github.com/#{match[:owner]}/#{match[:repo]}/settings/secrets/actions/new"
+    end
+
     private
 
     attr_reader :destination, :runner, :git_safe, :github_action

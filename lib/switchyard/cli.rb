@@ -109,8 +109,13 @@ module Switchyard
         puts "   To enable automated cleanup:"
         puts "   1. On Railway: Project Settings → Tokens → New Token"
         puts "      • Name suggestion: 'GitHub Actions - PR Cleanup' (Project Token)"
-        puts "   2. On GitHub:  Settings → Secrets and variables → Actions → New repository secret"
-        puts "      • Name: RAILWAY_TOKEN"
+        if (secrets_url = installer.github_secrets_url)
+          puts "   2. On GitHub: Add the secret directly at:"
+          puts "      👉 #{secrets_url}"
+        else
+          puts "   2. On GitHub: Settings → Secrets and variables → Actions → New repository secret"
+        end
+        puts "      • Name:   RAILWAY_TOKEN"
         puts "      • Secret: [Paste the copied Railway token]"
       end
 

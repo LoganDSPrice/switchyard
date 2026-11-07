@@ -93,6 +93,52 @@ RSpec.describe Switchyard::Installer do
       end
     end
 
+    describe "#github_secrets_url" do
+      context "with an SSH GitHub remote" do
+        it "returns the direct URL to add actions secrets" do
+          expect(runner).to receive(:capture).with(
+            "git", "remote", "get-url", "origin"
+          ).and_return(["git@github.com:LoganDSPrice/NBA-Over-Under-Redux.git\n", double(success?: true)])
+
+          expect(installer.github_secrets_url).to eq(
+            "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions/new"
+          )
+        end
+      end
+
+      context "with an HTTPS GitHub remote" do
+        it "returns the direct URL to add actions secrets" do
+          expect(runner).to receive(:capture).with(
+            "git", "remote", "get-url", "origin"
+          ).and_return(["https://github.com/LoganDSPrice/NBA-Over-Under-Redux.git\n", double(success?: true)])
+
+          expect(installer.github_secrets_url).to eq(
+            "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions/new"
+          )
+        end
+      end
+
+      context "when remote is not GitHub" do
+        it "returns nil" do
+          expect(runner).to receive(:capture).with(
+            "git", "remote", "get-url", "origin"
+          ).and_return(["git@gitlab.com:user/project.git\n", double(success?: true)])
+
+          expect(installer.github_secrets_url).to be_nil
+        end
+      end
+
+      context "when git command fails" do
+        it "returns nil" do
+          expect(runner).to receive(:capture).with(
+            "git", "remote", "get-url", "origin"
+          ).and_return(["fatal: not a git repository", double(success?: false)])
+
+          expect(installer.github_secrets_url).to be_nil
+        end
+      end
+    end
+
     context "when destination is not a Rails directory" do
       it "raises a NotInRailsProjectError" do
         expect {

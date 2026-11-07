@@ -10,6 +10,15 @@ RSpec.describe Switchyard::CLI do
   let(:adapter) { instance_double("Switchyard::Adapters::Railway") }
   let(:db_config) { instance_double("Switchyard::DatabaseConfig") }
 
+  def capture_stdout
+    original_stdout = $stdout
+    $stdout = StringIO.new
+    yield
+    $stdout.string
+  ensure
+    $stdout = original_stdout
+  end
+
   describe "#console" do
     it "delegates to the adapter" do
       expect(adapter).to receive(:console).with("staging")
@@ -91,10 +100,20 @@ RSpec.describe Switchyard::CLI do
     end
 
     it "passes github_action: true when --github-action flag is supplied" do
-      installer_double = instance_double("Switchyard::Installer", install!: true, git_safe_enabled?: false, github_action_generated?: true)
+      installer_double = instance_double(
+        "Switchyard::Installer",
+        install!: true,
+        git_safe_enabled?: false,
+        github_action_generated?: true,
+        github_secrets_url: "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions/new"
+      )
       expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false, github_action: true).and_return(installer_double)
 
-      described_class.start(["install", "--github-action"], config)
+      output = capture_stdout do
+        described_class.start(["install", "--github-action"], config)
+      end
+
+      expect(output).to include("https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions/new")
     end
   end
 
@@ -118,15 +137,6 @@ RSpec.describe Switchyard::CLI do
 
       expect(output).to include("restore [FROM] [TO]")
       expect(output).to include("--force")
-    end
-
-    def capture_stdout
-      original_stdout = $stdout
-      $stdout = StringIO.new
-      yield
-      $stdout.string
-    ensure
-      $stdout = original_stdout
     end
   end
 end

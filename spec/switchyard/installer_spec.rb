@@ -139,6 +139,69 @@ RSpec.describe Switchyard::Installer do
       end
     end
 
+    describe "#railway_tokens_url" do
+      context "when railway status returns project and environment IDs" do
+        let(:json_output) do
+          <<~JSON
+            {
+              "project": { "id": "proj-123", "name": "MyApp" },
+              "environment": { "id": "env-456", "name": "production" }
+            }
+          JSON
+        end
+
+        it "returns the direct tokens URL with environmentId" do
+          expect(runner).to receive(:capture).with(
+            "railway", "status", "--json"
+          ).and_return([json_output, double(success?: true)])
+
+          expect(installer.railway_tokens_url).to eq(
+            "https://railway.com/project/proj-123/settings/tokens?environmentId=env-456"
+          )
+        end
+      end
+
+      context "when railway status returns project ID without environment ID" do
+        let(:json_output) do
+          <<~JSON
+            {
+              "project": { "id": "proj-123", "name": "MyApp" }
+            }
+          JSON
+        end
+
+        it "returns the direct tokens URL without environmentId" do
+          expect(runner).to receive(:capture).with(
+            "railway", "status", "--json"
+          ).and_return([json_output, double(success?: true)])
+
+          expect(installer.railway_tokens_url).to eq(
+            "https://railway.com/project/proj-123/settings/tokens"
+          )
+        end
+      end
+
+      context "when railway CLI command fails or project is unlinked" do
+        it "returns nil" do
+          expect(runner).to receive(:capture).with(
+            "railway", "status", "--json"
+          ).and_return(["Project not found", double(success?: false)])
+
+          expect(installer.railway_tokens_url).to be_nil
+        end
+      end
+
+      context "when railway CLI returns invalid JSON" do
+        it "returns nil" do
+          expect(runner).to receive(:capture).with(
+            "railway", "status", "--json"
+          ).and_return(["not json", double(success?: true)])
+
+          expect(installer.railway_tokens_url).to be_nil
+        end
+      end
+    end
+
     context "when destination is not a Rails directory" do
       it "raises a NotInRailsProjectError" do
         expect {

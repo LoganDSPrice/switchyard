@@ -107,7 +107,12 @@ module Switchyard
       if installer.github_action_generated?
         puts "🤖 Generated .github/workflows/switchyard-cleanup-pr.yml!"
         puts "   To enable automated cleanup:"
-        puts "   1. On Railway: Project Settings → Tokens → New Token"
+        if (tokens_url = installer.railway_tokens_url)
+          puts "   1. On Railway: Create a Project Token directly at:"
+          puts "      👉 #{tokens_url}"
+        else
+          puts "   1. On Railway: Project Settings → Tokens → New Token"
+        end
         puts "      • Name suggestion: 'GitHub Actions - PR Cleanup' (Project Token)"
         if (secrets_url = installer.github_secrets_url)
           puts "   2. On GitHub: Add the secret directly at:"

@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "tmpdir"
+require "json"
 
 module Switchyard
   class Installer
@@ -185,6 +186,24 @@ module Switchyard
       return unless match
 
       "https://github.com/#{match[:owner]}/#{match[:repo]}/settings/secrets/actions/new"
+    end
+
+    def railway_tokens_url
+      stdout, status = runner.capture("railway", "status", "--json")
+      return unless status&.success?
+
+      parsed = JSON.parse(stdout)
+      project_id = parsed.dig("project", "id")
+      return unless project_id
+
+      env_id = parsed.dig("environment", "id")
+      if env_id
+        "https://railway.com/project/#{project_id}/settings/tokens?environmentId=#{env_id}"
+      else
+        "https://railway.com/project/#{project_id}/settings/tokens"
+      end
+    rescue StandardError
+      nil
     end
 
     private

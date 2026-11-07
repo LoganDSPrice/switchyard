@@ -161,6 +161,48 @@ RSpec.describe Switchyard::Installer do
         end
       end
 
+      context "when railway status returns standard root project schema with environments edges" do
+        let(:json_output) do
+          <<~JSON
+            {
+              "id": "e6cef8da-25b2-4aaa-a7cb-22406df4eeb6",
+              "name": "OverUnder",
+              "environments": {
+                "edges": [
+                  {
+                    "node": {
+                      "id": "6d8b8757-d8dd-4346-87e2-f373e05dbfc3",
+                      "name": "production"
+                    }
+                  }
+                ]
+              }
+            }
+          JSON
+        end
+
+        it "extracts project id and production environment id from edges" do
+          expect(runner).to receive(:capture).with(
+            "railway", "status", "--json"
+          ).and_return([json_output, double(success?: true)])
+
+          expect(installer.railway_tokens_url).to eq(
+            "https://railway.com/project/e6cef8da-25b2-4aaa-a7cb-22406df4eeb6/settings/tokens?environmentId=6d8b8757-d8dd-4346-87e2-f373e05dbfc3"
+          )
+        end
+
+        it "extracts JSON cleanly even when CLI output contains update banners or warnings" do
+          banner_output = "New version available: v5.71.0 visit https://docs.railway.com\n#{json_output}\nTip: Run update"
+          expect(runner).to receive(:capture).with(
+            "railway", "status", "--json"
+          ).and_return([banner_output, double(success?: true)])
+
+          expect(installer.railway_tokens_url).to eq(
+            "https://railway.com/project/e6cef8da-25b2-4aaa-a7cb-22406df4eeb6/settings/tokens?environmentId=6d8b8757-d8dd-4346-87e2-f373e05dbfc3"
+          )
+        end
+      end
+
       context "when railway status returns project ID without environment ID" do
         let(:json_output) do
           <<~JSON

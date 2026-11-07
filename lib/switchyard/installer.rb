@@ -192,11 +192,20 @@ module Switchyard
       stdout, status = runner.capture("railway", "status", "--json")
       return unless status&.success?
 
-      parsed = JSON.parse(stdout)
-      project_id = parsed.dig("project", "id")
+      json_match = stdout[/{.*}/m]
+      return unless json_match
+
+      parsed = JSON.parse(json_match)
+      project_id = parsed["id"] || parsed.dig("project", "id")
       return unless project_id
 
       env_id = parsed.dig("environment", "id")
+      if env_id.nil? && parsed["environments"]
+        edges = parsed.dig("environments", "edges") || []
+        prod_edge = edges.find { |e| e.dig("node", "name") == "production" } || edges.first
+        env_id = prod_edge&.dig("node", "id")
+      end
+
       if env_id
         "https://railway.com/project/#{project_id}/settings/tokens?environmentId=#{env_id}"
       else

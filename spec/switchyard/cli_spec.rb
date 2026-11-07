@@ -90,4 +90,36 @@ RSpec.describe Switchyard::CLI do
       described_class.start(["install", "--git-safe"], config)
     end
   end
+
+  describe "#help" do
+    it "prints comprehensive help including binstub shortcuts and workflow examples" do
+      output = capture_stdout do
+        described_class.start(["help"], config)
+      end
+
+      expect(output).to include("Switchyard — Environment & Database Parity for Rails on Railway")
+      expect(output).to include("BINSTUB SHORTCUTS")
+      expect(output).to include("dev restore")
+      expect(output).to include("staging console")
+      expect(output).to include("pr <number>")
+    end
+
+    it "still provides command-specific help when a command is given" do
+      output = capture_stdout do
+        described_class.start(["help", "restore"], config)
+      end
+
+      expect(output).to include("restore [FROM] [TO]")
+      expect(output).to include("--force")
+    end
+
+    def capture_stdout
+      original_stdout = $stdout
+      $stdout = StringIO.new
+      yield
+      $stdout.string
+    ensure
+      $stdout = original_stdout
+    end
+  end
 end

@@ -8,6 +8,35 @@ module Switchyard
       true
     end
 
+    def self.help(shell, subcommand = false)
+      list = printable_commands(true, subcommand)
+      Thor::Util.thor_classes_in(self).each do |klass|
+        list += klass.printable_commands(false)
+      end
+      list.sort! { |a, b| a[0] <=> b[0] }
+
+      shell.say "Switchyard — Environment & Database Parity for Rails on Railway"
+      shell.say
+      shell.say "USAGE:"
+      shell.say "  switchyard [COMMAND] [ARGS]"
+      shell.say "  # Or run the generated environment binstubs:"
+      shell.say "  [dev|staging|production|pr] [COMMAND] [ARGS]"
+      shell.say
+      shell.say "CORE COMMANDS:"
+      shell.print_table(list, indent: 2, truncate: true)
+      shell.say
+      shell.say "BINSTUB SHORTCUTS (Recommended):"
+      shell.say "  dev restore <from>                # e.g. `dev restore staging` (pulls remote DB into local dev)"
+      shell.say "  staging console                   # Opens remote Rails console on staging via SSH"
+      shell.say "  production console                # Opens remote Rails console on production via SSH"
+      shell.say "  staging logs                      # Streams real-time logs"
+      shell.say "  staging migrate                   # Runs remote database migrations via SSH"
+      shell.say "  pr <number> console               # e.g. `pr 142 console` (console in PR preview app)"
+      shell.say "  pr <number> restore <from>        # e.g. `pr 142 restore staging` (seeds PR database from staging)"
+      shell.say
+      shell.say "Run `switchyard help [COMMAND]` for detailed flags on any command."
+    end
+
     def initialize(args = [], local_options = {}, config = {})
       super
       @custom_config = config || {}

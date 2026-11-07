@@ -29,6 +29,10 @@ module Switchyard
         raise NotImplementedError
       end
 
+      def deploy_pr(environment, repo:, branch:, **options)
+        raise NotImplementedError
+      end
+
       private
 
       attr_reader :runner

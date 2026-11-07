@@ -40,6 +40,70 @@ module Switchyard
         clean = identifier.to_s.sub(/\Apr-?/i, "")
         "pr-#{clean}"
       end
+
+      def deploy_pr(environment, repo:, branch:, service: nil, base_environment: "staging")
+        ensure_environment_exists!(environment, duplicate_from: base_environment)
+        resolved_service = service || find_app_service(repo)
+
+        cmd = [
+          "railway", "service", "source", "connect",
+          "--environment", environment.to_s,
+          "--repo", repo.to_s,
+          "--branch", branch.to_s
+        ]
+        cmd += ["--service", resolved_service.to_s] if resolved_service
+
+        stdout, status = runner.capture(*cmd)
+        unless status&.success?
+          raise CommandError, "Failed to connect service source on Railway: #{stdout.strip}"
+        end
+
+        true
+      end
+
+      private
+
+      def ensure_environment_exists!(environment, duplicate_from:)
+        stdout, status = runner.capture("railway", "environment", "list", "--json")
+        environments = []
+        if status&.success? && (json_str = stdout[/\[.*\]/m])
+          parsed = begin
+            JSON.parse(json_str)
+          rescue StandardError
+            []
+          end
+          environments = parsed.map { |e| e["name"] }
+        end
+
+        return if environments.include?(environment.to_s)
+
+        success = runner.system("railway", "environment", "new", environment.to_s, "--duplicate", duplicate_from.to_s)
+        unless success
+          raise CommandError, "Failed to create Railway environment '#{environment}' duplicating '#{duplicate_from}'"
+        end
+      end
+
+      def find_app_service(target_repo = nil)
+        stdout, status = runner.capture("railway", "service", "list", "--json")
+        return unless status&.success?
+
+        json_str = stdout[/\[.*\]/m]
+        return unless json_str
+
+        services = begin
+          JSON.parse(json_str)
+        rescue StandardError
+          []
+        end
+        matching = services.find { |s| s.dig("source", "repo") == target_repo } if target_repo
+        matching ||= services.find { |s| s.dig("source", "repo") }
+        matching ||= services.find { |s| s["name"] !~ /postgres|redis|mysql|db/i }
+        matching ||= services.first
+
+        matching&.dig("name")
+      rescue StandardError
+        nil
+      end
     end
   end
 end

@@ -104,4 +104,104 @@ RSpec.describe Switchyard::Adapters::Railway do
       expect(adapter.resolve_pr_environment(142)).to eq("pr-142")
     end
   end
+
+  describe "#deploy_pr" do
+    let(:environments_json) do
+      <<~JSON
+        [
+          { "id": "env-1", "name": "production" },
+          { "id": "env-2", "name": "staging" }
+        ]
+      JSON
+    end
+
+    let(:services_json) do
+      <<~JSON
+        [
+          {
+            "id": "srv-1",
+            "name": "NBA-Over-Under-Redux",
+            "source": { "repo": "LoganDSPrice/NBA-Over-Under-Redux" }
+          },
+          {
+            "id": "srv-2",
+            "name": "Postgres",
+            "source": { "repo": null, "image": "postgres:17" }
+          }
+        ]
+      JSON
+    end
+
+    context "when PR environment does not exist yet" do
+      it "provisions environment by duplicating staging and connects the service to the GitHub branch" do
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([environments_json, double(success?: true)])
+
+        expect(runner).to receive(:system).with(
+          "railway", "environment", "new", "pr-157", "--duplicate", "staging"
+        ).and_return(true)
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "source", "connect",
+          "--environment", "pr-157",
+          "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
+          "--branch", "test/preview-app-banner",
+          "--service", "NBA-Over-Under-Redux"
+        ).and_return(["Connected source", double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner"
+        )
+        expect(result).to be(true)
+      end
+    end
+
+    context "when PR environment already exists" do
+      let(:environments_json_with_pr) do
+        <<~JSON
+          [
+            { "id": "env-1", "name": "production" },
+            { "id": "env-2", "name": "staging" },
+            { "id": "env-3", "name": "pr-157" }
+          ]
+        JSON
+      end
+
+      it "skips environment creation and connects the service to GitHub" do
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([environments_json_with_pr, double(success?: true)])
+
+        expect(runner).not_to receive(:system).with(
+          "railway", "environment", "new", any_args
+        )
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "source", "connect",
+          "--environment", "pr-157",
+          "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
+          "--branch", "test/preview-app-banner",
+          "--service", "NBA-Over-Under-Redux"
+        ).and_return(["Connected source", double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner"
+        )
+        expect(result).to be(true)
+      end
+    end
+  end
 end

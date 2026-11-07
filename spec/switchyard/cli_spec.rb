@@ -84,6 +84,38 @@ RSpec.describe Switchyard::CLI do
       described_class.start(["pr", "123", "migrate"], config)
     end
 
+    describe "interactive PR selection" do
+      let(:selected_pr) do
+        { number: 157, title: "test PR", branch: "test/preview-app-banner" }
+      end
+
+      it "interactively selects PR when no number is passed to console" do
+        expect(github).to receive(:select_pr).and_return(selected_pr)
+        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
+        expect(adapter).to receive(:console).with("pr-157")
+
+        described_class.start(["pr", "console"], config)
+      end
+
+      it "defaults to console on selected PR when pr is called with no arguments" do
+        expect(github).to receive(:select_pr).and_return(selected_pr)
+        expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
+        expect(adapter).to receive(:console).with("pr-157")
+
+        described_class.start(["pr"], config)
+      end
+
+      it "lists open PRs when called as 'pr list'" do
+        expect(github).to receive(:list_prs).and_return([selected_pr])
+
+        output = capture_stdout do
+          described_class.start(["pr", "list"], config)
+        end
+
+        expect(output).to include("#157 - test PR")
+      end
+    end
+
     describe "deploy subcommand" do
       let(:pr_payload) do
         {
@@ -112,7 +144,8 @@ RSpec.describe Switchyard::CLI do
       end
 
       it "auto-detects PR details from GitHub when called as 'pr deploy'" do
-        expect(github).to receive(:pr_info).with(nil).and_return(pr_payload)
+        expect(github).to receive(:select_pr).and_return(pr_payload)
+        expect(github).to receive(:pr_info).with(157).and_return(pr_payload)
         expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
         expect(adapter).to receive(:deploy_pr).with(
           "pr-157",

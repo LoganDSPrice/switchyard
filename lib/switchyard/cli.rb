@@ -88,13 +88,36 @@ module Switchyard
       ).run!
     end
 
+    PR_SUBCOMMANDS = %w[deploy console logs migrate restore list].freeze
+
     desc "pr [NUMBER] [COMMAND]", "Execute a command against a PR preview environment"
     method_option :seed, type: :string, lazy_default: "staging", desc: "Seed database from environment (default: staging) after deployment"
     method_option :service, type: :string, desc: "Railway service to connect and deploy"
-    def pr(identifier = nil, subcommand = "console", *args)
-      if identifier == "deploy"
-        subcommand = "deploy"
+    def pr(identifier = nil, subcommand = nil, *args)
+      if PR_SUBCOMMANDS.include?(identifier)
+        args = [subcommand] + args if subcommand
+        subcommand = identifier
         identifier = nil
+      end
+
+      if subcommand == "list"
+        prs = github.list_prs
+        if prs.empty?
+          say "No open pull requests found."
+        else
+          say "Open Pull Requests:"
+          prs.each do |pr|
+            say "  ##{pr[:number]} - #{pr[:title]} (branch: #{pr[:branch]})"
+          end
+        end
+        return
+      end
+
+      subcommand ||= "console"
+
+      if identifier.nil?
+        selected = github.select_pr(shell)
+        identifier = selected[:number]
       end
 
       if subcommand == "deploy"
@@ -123,8 +146,6 @@ module Switchyard
         say "  bin/pr #{pr_number} console    # Open remote Rails console"
         say "  bin/pr #{pr_number} migrate    # Run remote migrations"
       else
-        raise Error, "PR number required for #{subcommand}" unless identifier
-
         env = adapter.resolve_pr_environment(identifier)
 
         case subcommand

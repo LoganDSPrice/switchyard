@@ -16,6 +16,55 @@ module Switchyard
       fallback_to_git(identifier)
     end
 
+    def list_prs
+      stdout, status = runner.capture("gh", "pr", "list", "--json", "number,title,headRefName")
+      return [] unless status&.success?
+
+      json_match = stdout[/\[.*\]/m]
+      return [] unless json_match
+
+      data = JSON.parse(json_match)
+      data.map do |pr|
+        {
+          number: pr["number"],
+          title: pr["title"],
+          branch: pr["headRefName"]
+        }
+      end
+    rescue StandardError
+      []
+    end
+
+    def current_branch
+      stdout, status = runner.capture("git", "branch", "--show-current")
+      status&.success? ? stdout.strip : nil
+    end
+
+    def select_pr(shell = nil)
+      prs = list_prs
+      raise Error, "No open pull requests found." if prs.empty?
+
+      active_branch = current_branch
+      default_idx = prs.find_index { |pr| pr[:branch] == active_branch } || 0
+
+      if shell
+        shell.say "\nOpen Pull Requests:"
+        prs.each_with_index do |pr, idx|
+          is_default = (idx == default_idx)
+          indicator = is_default ? "  👉" : "    "
+          branch_info = "branch: #{pr[:branch]}"
+          current_marker = is_default && pr[:branch] == active_branch ? " [Current Branch]" : ""
+          shell.say "#{indicator} [#{idx + 1}] ##{pr[:number]} - #{pr[:title]} (#{branch_info})#{current_marker}"
+        end
+
+        input = shell.ask("\nSelect a PR [#{default_idx + 1}]:")
+        chosen_idx = input.to_s.strip.empty? ? default_idx : (input.to_i - 1)
+        prs[chosen_idx] || prs[default_idx]
+      else
+        prs[default_idx]
+      end
+    end
+
     private
 
     attr_reader :runner

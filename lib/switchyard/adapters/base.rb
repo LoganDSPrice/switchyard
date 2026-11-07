@@ -21,6 +21,14 @@ module Switchyard
         raise NotImplementedError
       end
 
+      def seed(environment, *args)
+        raise NotImplementedError
+      end
+
+      def resolve_base_environment
+        raise NotImplementedError
+      end
+
       def database_url(environment)
         raise NotImplementedError
       end

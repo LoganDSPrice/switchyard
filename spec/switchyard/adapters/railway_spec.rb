@@ -46,6 +46,34 @@ RSpec.describe Switchyard::Adapters::Railway do
     end
   end
 
+  describe "#seed" do
+    it "executes db:seed remotely inside the container via ssh" do
+      expect(runner).to receive(:system).with(
+        "railway", "ssh", "--environment", "pr-157", "--", "bin/rails", "db:seed"
+      ).and_return(true)
+
+      expect(adapter.seed("pr-157")).to be(true)
+    end
+  end
+
+  describe "#resolve_base_environment" do
+    it "returns staging when staging exists" do
+      json = '[{ "name": "production" }, { "name": "staging" }]'
+      expect(runner).to receive(:capture).with("railway", "environment", "list", "--json")
+        .and_return([json, double(success?: true)])
+
+      expect(adapter.resolve_base_environment).to eq("staging")
+    end
+
+    it "falls back to production when staging does not exist" do
+      json = '[{ "name": "production" }]'
+      expect(runner).to receive(:capture).with("railway", "environment", "list", "--json")
+        .and_return([json, double(success?: true)])
+
+      expect(adapter.resolve_base_environment).to eq("production")
+    end
+  end
+
   describe "#database_url" do
     let(:json_output) do
       <<~JSON

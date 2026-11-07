@@ -23,6 +23,18 @@ module Switchyard
         runner.system("railway", "ssh", "--environment", environment.to_s, "--", "bin/rails", "db:migrate", *args)
       end
 
+      def seed(environment, *args)
+        runner.system("railway", "ssh", "--environment", environment.to_s, "--", "bin/rails", "db:seed", *args)
+      end
+
+      def resolve_base_environment
+        envs = list_environments
+        return "staging" if envs.include?("staging")
+        return "production" if envs.include?("production")
+
+        envs.first || "staging"
+      end
+
       def database_url(environment)
         stdout, status = runner.capture("railway", "variables", "--environment", environment.to_s, "--json")
 
@@ -64,16 +76,7 @@ module Switchyard
       private
 
       def ensure_environment_exists!(environment, duplicate_from:)
-        stdout, status = runner.capture("railway", "environment", "list", "--json")
-        environments = []
-        if status&.success? && (json_str = stdout[/\[.*\]/m])
-          parsed = begin
-            JSON.parse(json_str)
-          rescue StandardError
-            []
-          end
-          environments = parsed.map { |e| e["name"] }
-        end
+        environments = list_environments
 
         return if environments.include?(environment.to_s)
 
@@ -111,6 +114,23 @@ module Switchyard
         matching&.dig("name")
       rescue StandardError
         nil
+      end
+
+      def list_environments
+        stdout, status = runner.capture("railway", "environment", "list", "--json")
+        return [] unless status&.success?
+
+        json_str = stdout[/\[.*\]/m]
+        return [] unless json_str
+
+        parsed = begin
+          JSON.parse(json_str)
+        rescue StandardError
+          []
+        end
+        parsed.map { |e| e["name"] }
+      rescue StandardError
+        []
       end
     end
   end

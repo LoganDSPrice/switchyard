@@ -22,10 +22,10 @@ RSpec.describe Switchyard::Installer do
         FileUtils.mkdir_p(File.join(temp_dir, "bin"))
       end
 
-      it "generates binstubs in bin/ for dev, staging, production, and pr" do
+      it "generates binstubs in bin/ for switchyard, dev, staging, production, and pr" do
         installer.install!
 
-        %w[dev staging production pr].each do |binstub|
+        %w[switchyard dev staging production pr].each do |binstub|
           path = File.join(temp_dir, "bin", binstub)
           expect(File.exist?(path)).to be true
           expect(File.stat(path).executable?).to be true

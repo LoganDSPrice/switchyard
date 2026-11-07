@@ -52,6 +52,7 @@ bundle exec switchyard install
 > This creates a local `.git/safe` directory, allowing local binstubs to **supersede** any conflicting global `asdf` shims (requires `.git/safe/../../bin` in your `$PATH`).
 
 This creates executable binstubs in your Rails app's `bin/`:
+- `bin/switchyard`
 - `bin/dev`
 - `bin/staging`
 - `bin/production`

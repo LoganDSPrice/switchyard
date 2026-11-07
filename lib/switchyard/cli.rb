@@ -67,7 +67,7 @@ module Switchyard
       installer = Installer.new(destination: Dir.pwd, git_safe: options[:git_safe])
       installer.install!
       puts "✨ Switchyard installed successfully!"
-      puts "Generated binstubs in bin/: dev, staging, production, pr"
+      puts "Generated binstubs in bin/: switchyard, dev, staging, production, pr"
       puts "Generated configuration: .switchyard.yml"
 
       if installer.git_safe_enabled?

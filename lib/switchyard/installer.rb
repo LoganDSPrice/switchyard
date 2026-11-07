@@ -8,6 +8,16 @@ module Switchyard
     class NotInRailsProjectError < Error; end
 
     BINSTUBS = {
+      "switchyard" => <<~RUBY,
+        #!/usr/bin/env ruby
+        # frozen_string_literal: true
+
+        require "bundler/setup"
+        require "switchyard"
+
+        Switchyard::CLI.start(ARGV)
+      RUBY
+
       "dev" => <<~RUBY,
         #!/usr/bin/env ruby
         # frozen_string_literal: true

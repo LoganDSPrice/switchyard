@@ -9,9 +9,9 @@ RSpec.describe Switchyard::Adapters::Railway do
   let(:runner) { instance_double("Switchyard::ProcessRunner") }
 
   describe "#console" do
-    it "executes rails console on the target environment" do
+    it "executes rails console remotely inside the container via ssh" do
       expect(runner).to receive(:exec).with(
-        "railway", "run", "--environment", "staging", "bin/rails", "console"
+        "railway", "ssh", "--environment", "staging", "--", "bin/rails", "console"
       )
 
       adapter.console("staging")
@@ -19,7 +19,7 @@ RSpec.describe Switchyard::Adapters::Railway do
 
     it "passes additional flags to console" do
       expect(runner).to receive(:exec).with(
-        "railway", "run", "--environment", "production", "bin/rails", "console", "--sandbox"
+        "railway", "ssh", "--environment", "production", "--", "bin/rails", "console", "--sandbox"
       )
 
       adapter.console("production", "--sandbox")
@@ -37,9 +37,9 @@ RSpec.describe Switchyard::Adapters::Railway do
   end
 
   describe "#migrate" do
-    it "executes db:migrate on the environment" do
+    it "executes db:migrate remotely inside the container via ssh" do
       expect(runner).to receive(:system).with(
-        "railway", "run", "--environment", "staging", "bin/rails", "db:migrate"
+        "railway", "ssh", "--environment", "staging", "--", "bin/rails", "db:migrate"
       ).and_return(true)
 
       expect(adapter.migrate("staging")).to be(true)
@@ -66,6 +66,17 @@ RSpec.describe Switchyard::Adapters::Railway do
       )
     end
 
+    it "prefers DATABASE_PUBLIC_URL when available for external access" do
+      json = '{"DATABASE_URL": "postgresql://postgres:secret@postgres.railway.internal:5432/railway", "DATABASE_PUBLIC_URL": "postgresql://postgres:secret@proxy.rlwy.net:123/railway"}'
+      expect(runner).to receive(:capture).with(
+        "railway", "variables", "--environment", "staging", "--json"
+      ).and_return([json, double(success?: true)])
+
+      expect(adapter.database_url("staging")).to eq(
+        "postgresql://postgres:secret@proxy.rlwy.net:123/railway"
+      )
+    end
+
     it "raises an error if DATABASE_URL is not found" do
       expect(runner).to receive(:capture).with(
         "railway", "variables", "--environment", "staging", "--json"
@@ -73,7 +84,7 @@ RSpec.describe Switchyard::Adapters::Railway do
 
       expect {
         adapter.database_url("staging")
-      }.to raise_error(Switchyard::Adapters::Railway::VariableNotFoundError, /DATABASE_URL not found/)
+      }.to raise_error(Switchyard::Adapters::Railway::VariableNotFoundError, /DATABASE_URL.*found/)
     end
 
     it "raises an error if railway CLI fails" do

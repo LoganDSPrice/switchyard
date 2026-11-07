@@ -9,10 +9,10 @@ module Switchyard
       class CommandError < Error; end
       class VariableNotFoundError < Error; end
 
-      DATABASE_KEY = "DATABASE_URL"
+      DATABASE_KEYS = %w[DATABASE_PUBLIC_URL DATABASE_URL].freeze
 
       def console(environment, *args)
-        runner.exec("railway", "run", "--environment", environment.to_s, "bin/rails", "console", *args)
+        runner.exec("railway", "ssh", "--environment", environment.to_s, "--", "bin/rails", "console", *args)
       end
 
       def logs(environment, *args)
@@ -20,7 +20,7 @@ module Switchyard
       end
 
       def migrate(environment, *args)
-        runner.system("railway", "run", "--environment", environment.to_s, "bin/rails", "db:migrate", *args)
+        runner.system("railway", "ssh", "--environment", environment.to_s, "--", "bin/rails", "db:migrate", *args)
       end
 
       def database_url(environment)
@@ -31,9 +31,9 @@ module Switchyard
         end
 
         parsed = JSON.parse(stdout)
-        parsed.fetch(DATABASE_KEY) do
-          raise VariableNotFoundError, "#{DATABASE_KEY} not found in environment '#{environment}'"
-        end
+        url_key = DATABASE_KEYS.find { |key| parsed.key?(key) && !parsed[key].to_s.empty? }
+
+        url_key ? parsed[url_key] : raise(VariableNotFoundError, "Neither DATABASE_PUBLIC_URL nor DATABASE_URL found in environment '#{environment}'")
       end
 
       def resolve_pr_environment(identifier)

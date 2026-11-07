@@ -57,7 +57,8 @@ module Switchyard
           shell.say "#{indicator} [#{idx + 1}] ##{pr[:number]} - #{pr[:title]} (#{branch_info})#{current_marker}"
         end
 
-        input = shell.ask("\nSelect a PR [#{default_idx + 1}]:")
+        shell.say ""
+        input = shell.ask("Select a PR [#{default_idx + 1}]:")
         chosen_idx = input.to_s.strip.empty? ? default_idx : (input.to_i - 1)
         prs[chosen_idx] || prs[default_idx]
       else

@@ -139,7 +139,8 @@ RSpec.describe Switchyard::GitHub do
       expect(shell).to receive(:say).with("\nOpen Pull Requests:")
       expect(shell).to receive(:say).with("  👉 [1] #157 - test: Railway PR preview app verification (branch: test/preview-app-banner) [Current Branch]")
       expect(shell).to receive(:say).with("     [2] #155 - chore(deps): bump dependencies (branch: dependabot/bundler)")
-      expect(shell).to receive(:ask).with("\nSelect a PR [1]:").and_return("")
+      expect(shell).to receive(:say).with("")
+      expect(shell).to receive(:ask).with("Select a PR [1]:").and_return("")
 
       selected = github.select_pr(shell)
       expect(selected[:number]).to eq(157)
@@ -147,7 +148,7 @@ RSpec.describe Switchyard::GitHub do
 
     it "allows selecting a different PR by number index" do
       allow(shell).to receive(:say)
-      expect(shell).to receive(:ask).with("\nSelect a PR [1]:").and_return("2")
+      expect(shell).to receive(:ask).with("Select a PR [1]:").and_return("2")
 
       selected = github.select_pr(shell)
       expect(selected[:number]).to eq(155)

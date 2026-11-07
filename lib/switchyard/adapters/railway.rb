@@ -77,9 +77,17 @@ module Switchyard
 
         return if environments.include?(environment.to_s)
 
-        success = runner.system("railway", "environment", "new", environment.to_s, "--duplicate", duplicate_from.to_s)
+        base = duplicate_from if environments.include?(duplicate_from.to_s)
+        base ||= "staging" if environments.include?("staging")
+        base ||= "production" if environments.include?("production")
+        base ||= environments.first
+
+        cmd = ["railway", "environment", "new", environment.to_s]
+        cmd += ["--duplicate", base.to_s] if base
+
+        success = runner.system(*cmd)
         unless success
-          raise CommandError, "Failed to create Railway environment '#{environment}' duplicating '#{duplicate_from}'"
+          raise CommandError, "Failed to create Railway environment '#{environment}'#{base ? " duplicating '#{base}'" : ""}"
         end
       end
 

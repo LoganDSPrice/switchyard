@@ -161,6 +161,36 @@ RSpec.describe Switchyard::Adapters::Railway do
         )
         expect(result).to be(true)
       end
+
+      it "falls back to duplicating production if staging does not exist on Railway" do
+        prod_only_json = '[{ "id": "env-1", "name": "production" }]'
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([prod_only_json, double(success?: true)])
+
+        expect(runner).to receive(:system).with(
+          "railway", "environment", "new", "pr-157", "--duplicate", "production"
+        ).and_return(true)
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "source", "connect",
+          "--environment", "pr-157",
+          "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
+          "--branch", "test/preview-app-banner",
+          "--service", "NBA-Over-Under-Redux"
+        ).and_return(["Connected source", double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner"
+        )
+        expect(result).to be(true)
+      end
     end
 
     context "when PR environment already exists" do

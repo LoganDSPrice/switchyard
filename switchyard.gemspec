@@ -41,9 +41,13 @@ Gem::Specification.new do |spec|
       --github-action  Generate a GitHub Action to auto-decommission review
                        apps on Railway when PRs are closed or merged.
 
-    Finding your RAILWAY_TOKEN (for automated cleanup):
-      1. On Railway: Project Settings → Tokens → New Token (Project Token)
-      2. On GitHub:  Settings → Secrets and variables → Actions → New repository secret (RAILWAY_TOKEN)
+    Creating your RAILWAY_TOKEN (for automated cleanup):
+      1. On Railway: Project Settings → Tokens → New Token
+         • Name suggestion: "GitHub Actions - PR Cleanup"
+         • Scope: Project Token
+      2. On GitHub:  Settings → Secrets and variables → Actions → New repository secret
+         • Name: RAILWAY_TOKEN
+         • Value: [Paste the copied Railway token]
 
     For full help and commands:
       bundle exec switchyard help

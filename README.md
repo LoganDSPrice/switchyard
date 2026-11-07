@@ -58,8 +58,12 @@ bundle exec switchyard install
 > This creates `.github/workflows/switchyard-cleanup-pr.yml`.
 > 
 > *To enable:*
-> 1. In Railway: Go to **Project Settings** → **Tokens** → **New Token** (Project Token).
-> 2. In GitHub: Go to **Settings** → **Secrets and variables** → **Actions** → **New repository secret** named `RAILWAY_TOKEN`.
+> 1. In Railway: Go to **Project Settings** → **Tokens** → **New Token**:
+>    - Name suggestion: `GitHub Actions - PR Cleanup`
+>    - Scope: Project Token
+> 2. In GitHub: Go to your repo's **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
+>    - Name: `RAILWAY_TOKEN`
+>    - Secret: Paste the copied token value.
 
 This creates executable binstubs in your Rails app's `bin/`:
 - `bin/switchyard`

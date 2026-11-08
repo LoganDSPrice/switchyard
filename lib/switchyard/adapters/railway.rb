@@ -55,19 +55,23 @@ module Switchyard
 
       def deploy_pr(environment, repo:, branch:, service: nil, base_environment: "staging")
         ensure_environment_exists!(environment, duplicate_from: base_environment)
-        resolved_service = service || find_app_service(repo)
+        resolved_service = service || find_app_service(repo, environment: environment, base_environment: base_environment)
+
+        unless resolved_service
+          raise CommandError, "Could not identify app service for deployment. Specify service via --service or config."
+        end
 
         cmd = [
           "railway", "service", "source", "connect",
           "--environment", environment.to_s,
           "--repo", repo.to_s,
-          "--branch", branch.to_s
+          "--branch", branch.to_s,
+          "--service", resolved_service.to_s
         ]
-        cmd += ["--service", resolved_service.to_s] if resolved_service
 
         stdout, status = runner.capture(*cmd)
         unless status&.success?
-          raise CommandError, "Failed to connect service source on Railway: #{stdout.strip}"
+          raise CommandError, "Failed to connect service source on Railway: #{stdout&.strip}"
         end
 
         true
@@ -87,15 +91,27 @@ module Switchyard
 
         cmd = ["railway", "environment", "new", environment.to_s]
         cmd += ["--duplicate", base.to_s] if base
+        cmd << "--json"
 
-        success = runner.system(*cmd)
-        unless success
-          raise CommandError, "Failed to create Railway environment '#{environment}'#{base ? " duplicating '#{base}'" : ""}"
+        stdout, status = runner.capture(*cmd)
+        unless status&.success?
+          raise CommandError, "Failed to create Railway environment '#{environment}'#{base ? " duplicating '#{base}'" : ""}: #{stdout&.strip}"
         end
       end
 
-      def find_app_service(target_repo = nil)
-        stdout, status = runner.capture("railway", "service", "list", "--json")
+      def find_app_service(target_repo = nil, environment: nil, base_environment: nil)
+        service = query_service(target_repo, environment: environment) if environment
+        service ||= query_service(target_repo, environment: base_environment) if base_environment
+        service ||= query_service(target_repo, environment: nil)
+        service
+      end
+
+      def query_service(target_repo = nil, environment: nil)
+        args = ["railway", "service", "list"]
+        args += ["--environment", environment.to_s] if environment
+        args << "--json"
+
+        stdout, status = runner.capture(*args)
         return unless status&.success?
 
         json_str = stdout[/\[.*\]/m]

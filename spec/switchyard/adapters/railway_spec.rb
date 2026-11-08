@@ -161,17 +161,17 @@ RSpec.describe Switchyard::Adapters::Railway do
     end
 
     context "when PR environment does not exist yet" do
-      it "provisions environment by duplicating staging and connects the service to the GitHub branch" do
+      it "provisions environment non-interactively with --json duplicating staging and connects the service to the GitHub branch" do
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
         ).and_return([environments_json, double(success?: true)])
 
-        expect(runner).to receive(:system).with(
-          "railway", "environment", "new", "pr-157", "--duplicate", "staging"
-        ).and_return(true)
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "new", "pr-157", "--duplicate", "staging", "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "list", "--json"
+          "railway", "service", "list", "--environment", "pr-157", "--json"
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
@@ -196,12 +196,12 @@ RSpec.describe Switchyard::Adapters::Railway do
           "railway", "environment", "list", "--json"
         ).and_return([prod_only_json, double(success?: true)])
 
-        expect(runner).to receive(:system).with(
-          "railway", "environment", "new", "pr-157", "--duplicate", "production"
-        ).and_return(true)
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "new", "pr-157", "--duplicate", "production", "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "list", "--json"
+          "railway", "service", "list", "--environment", "pr-157", "--json"
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
@@ -237,12 +237,12 @@ RSpec.describe Switchyard::Adapters::Railway do
           "railway", "environment", "list", "--json"
         ).and_return([environments_json_with_pr, double(success?: true)])
 
-        expect(runner).not_to receive(:system).with(
+        expect(runner).not_to receive(:capture).with(
           "railway", "environment", "new", any_args
         )
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "list", "--json"
+          "railway", "service", "list", "--environment", "pr-157", "--json"
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(

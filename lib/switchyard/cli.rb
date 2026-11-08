@@ -132,7 +132,7 @@ module Switchyard
           env,
           repo: info[:repo],
           branch: info[:branch],
-          service: options[:service]
+          service: options[:service] || config.app_service
         )
         say "✨ Connected and triggered deployment on Railway!"
 
@@ -223,6 +223,7 @@ module Switchyard
     def switchyard_config
       @custom_config[:switchyard_config] || Config.new
     end
+    alias_method :config, :switchyard_config
 
     def handle_pr_database!(env)
       return if options[:skip_db] || switchyard_config.pr_database_strategy == "none"

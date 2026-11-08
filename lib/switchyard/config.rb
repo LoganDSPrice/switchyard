@@ -31,6 +31,10 @@ module Switchyard
       @data.dig("pr", "default_db_source") || "auto"
     end
 
+    def app_service
+      @data["app_service"] || @data["service"]
+    end
+
     def raw_data
       @data
     end

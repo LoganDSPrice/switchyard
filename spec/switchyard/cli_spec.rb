@@ -10,7 +10,7 @@ RSpec.describe Switchyard::CLI do
   let(:adapter) { instance_double("Switchyard::Adapters::Railway") }
   let(:db_config) { instance_double("Switchyard::DatabaseConfig") }
   let(:github) { instance_double("Switchyard::GitHub") }
-  let(:switchyard_config) { instance_double("Switchyard::Config", pr_database_strategy: "copy", pr_default_db_source: "auto") }
+  let(:switchyard_config) { instance_double("Switchyard::Config", pr_database_strategy: "copy", pr_default_db_source: "auto", app_service: nil) }
 
   def capture_stdout
     original_stdout = $stdout

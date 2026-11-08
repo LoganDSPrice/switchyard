@@ -18,6 +18,7 @@ RSpec.describe Switchyard::Config do
       expect(config.adapter).to eq("railway")
       expect(config.pr_database_strategy).to eq("copy")
       expect(config.pr_default_db_source).to eq("auto")
+      expect(config.app_service).to be_nil
     end
   end
 
@@ -25,6 +26,7 @@ RSpec.describe Switchyard::Config do
     before do
       File.write(File.join(dir, ".switchyard.yml"), <<~YAML)
         adapter: railway
+        service: web-app
         pr:
           database_strategy: seed
           default_db_source: production
@@ -32,6 +34,7 @@ RSpec.describe Switchyard::Config do
     end
 
     it "reads custom values from the configuration file" do
+      expect(config.app_service).to eq("web-app")
       expect(config.pr_database_strategy).to eq("seed")
       expect(config.pr_default_db_source).to eq("production")
     end

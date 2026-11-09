@@ -10,7 +10,7 @@ RSpec.describe Switchyard::CLI do
   let(:adapter) { instance_double("Switchyard::Adapters::Railway") }
   let(:db_config) { instance_double("Switchyard::DatabaseConfig") }
   let(:github) { instance_double("Switchyard::GitHub") }
-  let(:switchyard_config) { instance_double("Switchyard::Config", pr_database_strategy: "copy", pr_default_db_source: "auto", app_service: nil) }
+  let(:switchyard_config) { instance_double("Switchyard::Config", pr_database_strategy: "copy", pr_default_db_source: "auto", app_service: nil, port: 80) }
 
   def capture_stdout
     original_stdout = $stdout
@@ -133,16 +133,17 @@ RSpec.describe Switchyard::CLI do
           "pr-157",
           repo: "LoganDSPrice/NBA-Over-Under-Redux",
           branch: "test/preview-app-banner",
-          service: nil
+          service: nil,
+          port: 80
         )
 
         expect(adapter).to receive(:resolve_base_environment).and_return("staging")
         expect(adapter).to receive(:database_url).with("staging").and_return("postgresql://user:pass@host/remote")
-        expect(db_config).to receive(:database_name).with("pr-157").and_return("myapp_pr_157")
+        expect(adapter).to receive(:database_url).with("pr-157").and_return("postgresql://user:pass@host/remote_pr")
         sync_double = instance_double("Switchyard::Database::Sync", run!: true)
         expect(Switchyard::Database::Sync).to receive(:new).with(
           source_url: "postgresql://user:pass@host/remote",
-          target_db: "myapp_pr_157",
+          target_url: "postgresql://user:pass@host/remote_pr",
           target_env: "pr-157",
           force: false
         ).and_return(sync_double)
@@ -164,16 +165,17 @@ RSpec.describe Switchyard::CLI do
           "pr-157",
           repo: "LoganDSPrice/NBA-Over-Under-Redux",
           branch: "test/preview-app-banner",
-          service: nil
+          service: nil,
+          port: 80
         )
 
         expect(adapter).to receive(:resolve_base_environment).and_return("production")
         expect(adapter).to receive(:database_url).with("production").and_return("postgresql://user:pass@host/remote")
-        expect(db_config).to receive(:database_name).with("pr-157").and_return("myapp_pr_157")
+        expect(adapter).to receive(:database_url).with("pr-157").and_return("postgresql://user:pass@host/remote_pr")
         sync_double = instance_double("Switchyard::Database::Sync", run!: true)
         expect(Switchyard::Database::Sync).to receive(:new).with(
           source_url: "postgresql://user:pass@host/remote",
-          target_db: "myapp_pr_157",
+          target_url: "postgresql://user:pass@host/remote_pr",
           target_env: "pr-157",
           force: false
         ).and_return(sync_double)
@@ -193,7 +195,8 @@ RSpec.describe Switchyard::CLI do
           "pr-157",
           repo: "LoganDSPrice/NBA-Over-Under-Redux",
           branch: "test/preview-app-banner",
-          service: nil
+          service: nil,
+          port: 80
         )
 
         expect(adapter).to receive(:seed).with("pr-157")
@@ -213,7 +216,8 @@ RSpec.describe Switchyard::CLI do
           "pr-157",
           repo: "LoganDSPrice/NBA-Over-Under-Redux",
           branch: "test/preview-app-banner",
-          service: nil
+          service: nil,
+          port: 80
         )
 
         expect(adapter).not_to receive(:seed)
@@ -234,15 +238,16 @@ RSpec.describe Switchyard::CLI do
           "pr-157",
           repo: "LoganDSPrice/NBA-Over-Under-Redux",
           branch: "test/preview-app-banner",
-          service: nil
+          service: nil,
+          port: 80
         )
 
         expect(adapter).to receive(:database_url).with("production").and_return("postgresql://user:pass@host/remote")
-        expect(db_config).to receive(:database_name).with("pr-157").and_return("myapp_pr_157")
+        expect(adapter).to receive(:database_url).with("pr-157").and_return("postgresql://user:pass@host/remote_pr")
         sync_double = instance_double("Switchyard::Database::Sync", run!: true)
         expect(Switchyard::Database::Sync).to receive(:new).with(
           source_url: "postgresql://user:pass@host/remote",
-          target_db: "myapp_pr_157",
+          target_url: "postgresql://user:pass@host/remote_pr",
           target_env: "pr-157",
           force: false
         ).and_return(sync_double)

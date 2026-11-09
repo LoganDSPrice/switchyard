@@ -39,6 +39,34 @@ RSpec.describe Switchyard::Database::Sync do
       end
     end
 
+    context "when restoring to a remote environment with target_url" do
+      subject(:sync) do
+        described_class.new(
+          source_url: source_url,
+          target_url: target_url,
+          target_env: "pr-160",
+          runner: runner,
+          force: force
+        )
+      end
+
+      let(:target_url) { "postgresql://user:pass@host:5432/pr_160_db" }
+
+      it "streams pg_dump into pg_restore directly without dropping local database" do
+        expect(runner).not_to receive(:system).with(/dropdb/)
+
+        expect(runner).to receive(:system).with(
+          satisfy { |cmd| cmd.include?("pg_dump") && cmd.include?("pg_restore") && cmd.include?(target_url) }
+        ).and_return(true)
+
+        expect(runner).to receive(:system).with(
+          satisfy { |cmd| cmd.include?("psql") && cmd.include?(target_url) && cmd.include?("ar_internal_metadata") }
+        ).and_return(true)
+
+        expect(sync.run!).to be(true)
+      end
+    end
+
     context "when attempting to restore into a protected environment (production)" do
       let(:target_env) { "production" }
 

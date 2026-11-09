@@ -75,6 +75,10 @@ RSpec.describe Switchyard::Adapters::Railway do
   end
 
   describe "#database_url" do
+    before do
+      allow(runner).to receive(:capture).with("railway", "service", "list", any_args).and_return(["[]", double(success?: true)])
+    end
+
     let(:json_output) do
       <<~JSON
         {
@@ -82,6 +86,21 @@ RSpec.describe Switchyard::Adapters::Railway do
           "PORT": "3000"
         }
       JSON
+    end
+
+    it "queries the database service when auto-detected" do
+      services_with_pg = '[{ "name": "NBA-Over-Under-Redux" }, { "name": "Postgres", "source": { "image": "postgres:17" } }]'
+      expect(runner).to receive(:capture).with(
+        "railway", "service", "list", "--environment", "staging", "--json"
+      ).and_return([services_with_pg, double(success?: true)])
+
+      expect(runner).to receive(:capture).with(
+        "railway", "variables", "--environment", "staging", "--service", "Postgres", "--json"
+      ).and_return([json_output, double(success?: true)])
+
+      expect(adapter.database_url("staging")).to eq(
+        "postgresql://postgres:secret@monorail.proxy.rlwy.net:12345/railway"
+      )
     end
 
     it "fetches variables in JSON and returns DATABASE_URL" do
@@ -160,6 +179,10 @@ RSpec.describe Switchyard::Adapters::Railway do
       JSON
     end
 
+    before do
+      allow(runner).to receive(:capture).with("railway", "deployment", "list", any_args).and_return(["[]", double(success?: true)])
+    end
+
     context "when PR environment does not exist yet" do
       it "provisions environment non-interactively with --json duplicating staging and connects the service to the GitHub branch" do
         expect(runner).to receive(:capture).with(
@@ -175,6 +198,12 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
+          "railway", "variable", "set", "PORT=80",
+          "--environment", "pr-157",
+          "--service", "NBA-Over-Under-Redux"
+        ).and_return(["Set PORT=80", double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
           "railway", "service", "source", "connect",
           "--environment", "pr-157",
           "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
@@ -185,7 +214,57 @@ RSpec.describe Switchyard::Adapters::Railway do
         result = adapter.deploy_pr(
           "pr-157",
           repo: "LoganDSPrice/NBA-Over-Under-Redux",
-          branch: "test/preview-app-banner"
+          branch: "test/preview-app-banner",
+          port: 80
+        )
+        expect(result).to be(true)
+      end
+
+      it "cancels in-flight duplicate deployment if one was triggered during environment creation" do
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([environments_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "new", "pr-157", "--duplicate", "staging", "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--environment", "pr-157", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "variable", "set", "PORT=80",
+          "--environment", "pr-157",
+          "--service", "NBA-Over-Under-Redux"
+        ).and_return(["Set PORT=80", double(success?: true)])
+
+        in_flight_json = '[{ "id": "dep-old-main", "status": "BUILDING" }]'
+        expect(runner).to receive(:capture).with(
+          "railway", "deployment", "list",
+          "--service", "NBA-Over-Under-Redux",
+          "--environment", "pr-157",
+          "--json"
+        ).and_return([in_flight_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "api", "mutation($id: String!) { deploymentCancel(id: $id) }",
+          "--var", "id=dep-old-main"
+        ).and_return(["Cancelled", double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "source", "connect",
+          "--environment", "pr-157",
+          "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
+          "--branch", "test/preview-app-banner",
+          "--service", "NBA-Over-Under-Redux"
+        ).and_return(["Connected source", double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          port: 80
         )
         expect(result).to be(true)
       end
@@ -205,6 +284,12 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
+          "railway", "variable", "set", "PORT=80",
+          "--environment", "pr-157",
+          "--service", "NBA-Over-Under-Redux"
+        ).and_return(["Set PORT=80", double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
           "railway", "service", "source", "connect",
           "--environment", "pr-157",
           "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
@@ -215,7 +300,8 @@ RSpec.describe Switchyard::Adapters::Railway do
         result = adapter.deploy_pr(
           "pr-157",
           repo: "LoganDSPrice/NBA-Over-Under-Redux",
-          branch: "test/preview-app-banner"
+          branch: "test/preview-app-banner",
+          port: 80
         )
         expect(result).to be(true)
       end
@@ -246,6 +332,12 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
+          "railway", "variable", "set", "PORT=80",
+          "--environment", "pr-157",
+          "--service", "NBA-Over-Under-Redux"
+        ).and_return(["Set PORT=80", double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
           "railway", "service", "source", "connect",
           "--environment", "pr-157",
           "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
@@ -256,7 +348,8 @@ RSpec.describe Switchyard::Adapters::Railway do
         result = adapter.deploy_pr(
           "pr-157",
           repo: "LoganDSPrice/NBA-Over-Under-Redux",
-          branch: "test/preview-app-banner"
+          branch: "test/preview-app-banner",
+          port: 80
         )
         expect(result).to be(true)
       end

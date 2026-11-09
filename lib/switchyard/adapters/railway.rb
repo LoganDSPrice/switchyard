@@ -35,14 +35,25 @@ module Switchyard
         envs.first || "staging"
       end
 
-      def database_url(environment)
-        stdout, status = runner.capture("railway", "variables", "--environment", environment.to_s, "--json")
+      def database_url(environment, service: nil)
+        db_service = service || find_db_service(environment: environment)
 
-        unless status.success?
-          raise CommandError, "Failed to fetch variables for environment '#{environment}': #{stdout.strip}"
+        cmd = ["railway", "variables", "--environment", environment.to_s]
+        cmd += ["--service", db_service.to_s] if db_service
+        cmd << "--json"
+
+        stdout, status = runner.capture(*cmd)
+
+        unless status&.success?
+          raise CommandError, "Failed to fetch variables for environment '#{environment}': #{stdout&.strip}"
         end
 
-        parsed = JSON.parse(stdout)
+        json_str = stdout[/\{.*\}/m]
+        unless json_str
+          raise CommandError, "Failed to parse variables for environment '#{environment}': #{stdout&.strip}"
+        end
+
+        parsed = JSON.parse(json_str)
         url_key = DATABASE_KEYS.find { |key| parsed.key?(key) && !parsed[key].to_s.empty? }
 
         url_key ? parsed[url_key] : raise(VariableNotFoundError, "Neither DATABASE_PUBLIC_URL nor DATABASE_URL found in environment '#{environment}'")
@@ -53,13 +64,16 @@ module Switchyard
         "pr-#{clean}"
       end
 
-      def deploy_pr(environment, repo:, branch:, service: nil, base_environment: "staging")
+      def deploy_pr(environment, repo:, branch:, service: nil, base_environment: "staging", port: nil)
         ensure_environment_exists!(environment, duplicate_from: base_environment)
         resolved_service = service || find_app_service(repo, environment: environment, base_environment: base_environment)
 
         unless resolved_service
           raise CommandError, "Could not identify app service for deployment. Specify service via --service or config."
         end
+
+        ensure_service_port!(environment, resolved_service, port: port) if port
+        cancel_duplicate_deployment!(environment, resolved_service)
 
         cmd = [
           "railway", "service", "source", "connect",
@@ -97,6 +111,60 @@ module Switchyard
         unless status&.success?
           raise CommandError, "Failed to create Railway environment '#{environment}'#{base ? " duplicating '#{base}'" : ""}: #{stdout&.strip}"
         end
+      end
+
+      def find_db_service(environment: nil)
+        args = ["railway", "service", "list"]
+        args += ["--environment", environment.to_s] if environment
+        args << "--json"
+
+        stdout, status = runner.capture(*args)
+        return unless status&.success?
+
+        json_str = stdout[/\[.*\]/m]
+        return unless json_str
+
+        services = begin
+          JSON.parse(json_str)
+        rescue StandardError
+          []
+        end
+
+        db = services.find { |s| s["name"] =~ /postgres|db|database/i || s.dig("source", "image") =~ /postgres/i }
+        db&.dig("name")
+      rescue StandardError
+        nil
+      end
+
+      def ensure_service_port!(environment, service, port:)
+        runner.capture(
+          "railway", "variable", "set", "PORT=#{port}",
+          "--environment", environment.to_s,
+          "--service", service.to_s
+        )
+      rescue StandardError
+        nil
+      end
+
+      def cancel_duplicate_deployment!(environment, service)
+        stdout, status = runner.capture("railway", "deployment", "list", "--service", service.to_s, "--environment", environment.to_s, "--json")
+        return unless status&.success?
+
+        json_str = stdout[/\[.*\]/m]
+        return unless json_str
+
+        deployments = begin
+          JSON.parse(json_str)
+        rescue StandardError
+          []
+        end
+
+        in_flight = deployments.find { |d| %w[BUILDING INITIALIZING QUEUED].include?(d["status"]) }
+        if in_flight && in_flight["id"]
+          runner.capture("railway", "api", "mutation($id: String!) { deploymentCancel(id: $id) }", "--var", "id=#{in_flight['id']}")
+        end
+      rescue StandardError
+        nil
       end
 
       def find_app_service(target_repo = nil, environment: nil, base_environment: nil)

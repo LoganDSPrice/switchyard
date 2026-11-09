@@ -35,6 +35,10 @@ module Switchyard
       @data["app_service"] || @data["service"]
     end
 
+    def port
+      @data["port"] || @data.dig("pr", "port") || 80
+    end
+
     def raw_data
       @data
     end

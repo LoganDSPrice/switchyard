@@ -29,7 +29,7 @@ module Switchyard
         raise NotImplementedError
       end
 
-      def database_url(environment)
+      def database_url(environment, **options)
         raise NotImplementedError
       end
 

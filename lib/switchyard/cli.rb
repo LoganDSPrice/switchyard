@@ -78,14 +78,24 @@ module Switchyard
     method_option :force, type: :boolean, default: false, desc: "Bypass protected environment checks"
     def restore(from, to = "development")
       source_url = adapter.database_url(from)
-      target_db = db_config.database_name(to)
 
-      Database::Sync.new(
-        source_url: source_url,
-        target_db: target_db,
-        target_env: to,
-        force: options[:force] || false
-      ).run!
+      if to == "development"
+        target_db = db_config.database_name(to)
+        Database::Sync.new(
+          source_url: source_url,
+          target_db: target_db,
+          target_env: to,
+          force: options[:force] || false
+        ).run!
+      else
+        target_url = adapter.database_url(to)
+        Database::Sync.new(
+          source_url: source_url,
+          target_url: target_url,
+          target_env: to,
+          force: options[:force] || false
+        ).run!
+      end
     end
 
     PR_SUBCOMMANDS = %w[deploy console logs migrate restore list].freeze
@@ -95,6 +105,7 @@ module Switchyard
     method_option :copy, type: :string, lazy_default: "auto", desc: "Copy remote database from environment (default: auto, using staging/production)"
     method_option :skip_db, type: :boolean, default: false, desc: "Skip database copying/seeding on deploy"
     method_option :service, type: :string, desc: "Railway service to connect and deploy"
+    method_option :port, type: :numeric, desc: "Port for application container (default: 80)"
     def pr(identifier = nil, subcommand = nil, *args)
       if PR_SUBCOMMANDS.include?(identifier)
         args = [subcommand] + args if subcommand
@@ -132,7 +143,8 @@ module Switchyard
           env,
           repo: info[:repo],
           branch: info[:branch],
-          service: options[:service] || config.app_service
+          service: options[:service] || config.app_service,
+          port: options[:port] || config.port
         )
         say "✨ Connected and triggered deployment on Railway!"
 

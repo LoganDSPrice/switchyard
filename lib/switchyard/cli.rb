@@ -10,8 +10,8 @@ module Switchyard
 
     def self.start(given_args = ARGV, config = {})
       if given_args.is_a?(Array) && given_args.size >= 2
-        help_idx = given_args.index { |arg| arg == "--help" || arg == "-h" }
-        if help_idx && help_idx.positive?
+        help_idx = given_args.index { |arg| ["--help", "-h"].include?(arg) }
+        if help_idx&.positive?
           command = given_args.first
           return super(["help", command], config)
         end
@@ -221,7 +221,7 @@ module Switchyard
     private
 
     def adapter
-      @custom_config[:adapter] || Adapters::Railway.new
+      @custom_config[:adapter] || Adapters::Railway.new(service: switchyard_config.app_service)
     end
 
     def db_config
@@ -235,7 +235,7 @@ module Switchyard
     def switchyard_config
       @custom_config[:switchyard_config] || Config.new
     end
-    alias_method :config, :switchyard_config
+    alias config switchyard_config
 
     def handle_pr_database!(env)
       return if options[:skip_db] || switchyard_config.pr_database_strategy == "none"

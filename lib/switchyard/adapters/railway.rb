@@ -11,20 +11,43 @@ module Switchyard
 
       DATABASE_KEYS = %w[DATABASE_PUBLIC_URL DATABASE_URL].freeze
 
-      def console(environment, *args)
-        runner.exec("railway", "ssh", "--environment", environment.to_s, "--", "bin/rails", "console", *args)
+      attr_reader :service
+
+      def initialize(runner: ProcessRunner.new, service: nil)
+        super(runner: runner)
+        @service = service
       end
 
-      def logs(environment, *args)
-        runner.exec("railway", "logs", "--environment", environment.to_s, *args)
+      def console(environment, *args, service: nil)
+        svc = service || @service
+        cmd = ["railway", "ssh", "--environment", environment.to_s]
+        cmd += ["--service", svc.to_s] if svc
+        cmd += ["--", "bin/rails", "console", *args]
+        runner.exec(*cmd)
       end
 
-      def migrate(environment, *args)
-        runner.system("railway", "ssh", "--environment", environment.to_s, "--", "bin/rails", "db:migrate", *args)
+      def logs(environment, *args, service: nil)
+        svc = service || @service
+        cmd = ["railway", "logs", "--environment", environment.to_s]
+        cmd += ["--service", svc.to_s] if svc
+        cmd += args
+        runner.exec(*cmd)
       end
 
-      def seed(environment, *args)
-        runner.system("railway", "ssh", "--environment", environment.to_s, "--", "bin/rails", "db:seed", *args)
+      def migrate(environment, *args, service: nil)
+        svc = service || @service
+        cmd = ["railway", "ssh", "--environment", environment.to_s]
+        cmd += ["--service", svc.to_s] if svc
+        cmd += ["--", "bin/rails", "db:migrate", *args]
+        runner.system(*cmd)
+      end
+
+      def seed(environment, *args, service: nil)
+        svc = service || @service
+        cmd = ["railway", "ssh", "--environment", environment.to_s]
+        cmd += ["--service", svc.to_s] if svc
+        cmd += ["--", "bin/rails", "db:seed", *args]
+        runner.system(*cmd)
       end
 
       def resolve_base_environment
@@ -44,14 +67,10 @@ module Switchyard
 
         stdout, status = runner.capture(*cmd)
 
-        unless status&.success?
-          raise CommandError, "Failed to fetch variables for environment '#{environment}': #{stdout&.strip}"
-        end
+        raise CommandError, "Failed to fetch variables for environment '#{environment}': #{stdout&.strip}" unless status&.success?
 
         json_str = stdout[/\{.*\}/m]
-        unless json_str
-          raise CommandError, "Failed to parse variables for environment '#{environment}': #{stdout&.strip}"
-        end
+        raise CommandError, "Failed to parse variables for environment '#{environment}': #{stdout&.strip}" unless json_str
 
         parsed = JSON.parse(json_str)
         url_key = DATABASE_KEYS.find { |key| parsed.key?(key) && !parsed[key].to_s.empty? }
@@ -68,9 +87,7 @@ module Switchyard
         ensure_environment_exists!(environment, duplicate_from: base_environment)
         resolved_service = service || find_app_service(repo, environment: environment, base_environment: base_environment)
 
-        unless resolved_service
-          raise CommandError, "Could not identify app service for deployment. Specify service via --service or config."
-        end
+        raise CommandError, "Could not identify app service for deployment. Specify service via --service or config." unless resolved_service
 
         ensure_service_port!(environment, resolved_service, port: port) if port
         cancel_duplicate_deployment!(environment, resolved_service)
@@ -84,9 +101,7 @@ module Switchyard
         ]
 
         stdout, status = runner.capture(*cmd)
-        unless status&.success?
-          raise CommandError, "Failed to connect service source on Railway: #{stdout&.strip}"
-        end
+        raise CommandError, "Failed to connect service source on Railway: #{stdout&.strip}" unless status&.success?
 
         true
       end
@@ -108,13 +123,13 @@ module Switchyard
         cmd << "--json"
 
         stdout, status = runner.capture(*cmd)
-        unless status&.success?
-          raise CommandError, "Failed to create Railway environment '#{environment}'#{base ? " duplicating '#{base}'" : ""}: #{stdout&.strip}"
-        end
+        return if status&.success?
+
+        raise CommandError, "Failed to create Railway environment '#{environment}'#{" duplicating '#{base}'" if base}: #{stdout&.strip}"
       end
 
       def find_db_service(environment: nil)
-        args = ["railway", "service", "list"]
+        args = %w[railway service list]
         args += ["--environment", environment.to_s] if environment
         args << "--json"
 
@@ -175,7 +190,7 @@ module Switchyard
       end
 
       def query_service(target_repo = nil, environment: nil)
-        args = ["railway", "service", "list"]
+        args = %w[railway service list]
         args += ["--environment", environment.to_s] if environment
         args << "--json"
 

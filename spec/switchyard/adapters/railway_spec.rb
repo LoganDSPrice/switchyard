@@ -24,6 +24,15 @@ RSpec.describe Switchyard::Adapters::Railway do
 
       adapter.console("production", "--sandbox")
     end
+
+    it "includes --service when service is configured on adapter" do
+      adapter_with_service = described_class.new(runner: runner, service: "NBA-Over-Under-Redux")
+      expect(runner).to receive(:exec).with(
+        "railway", "ssh", "--environment", "staging", "--service", "NBA-Over-Under-Redux", "--", "bin/rails", "console"
+      )
+
+      adapter_with_service.console("staging")
+    end
   end
 
   describe "#logs" do
@@ -33,6 +42,15 @@ RSpec.describe Switchyard::Adapters::Railway do
       )
 
       adapter.logs("staging")
+    end
+
+    it "includes --service when service is configured on adapter" do
+      adapter_with_service = described_class.new(runner: runner, service: "NBA-Over-Under-Redux")
+      expect(runner).to receive(:exec).with(
+        "railway", "logs", "--environment", "staging", "--service", "NBA-Over-Under-Redux"
+      )
+
+      adapter_with_service.logs("staging")
     end
   end
 
@@ -44,6 +62,15 @@ RSpec.describe Switchyard::Adapters::Railway do
 
       expect(adapter.migrate("staging")).to be(true)
     end
+
+    it "includes --service when service is configured on adapter" do
+      adapter_with_service = described_class.new(runner: runner, service: "NBA-Over-Under-Redux")
+      expect(runner).to receive(:system).with(
+        "railway", "ssh", "--environment", "staging", "--service", "NBA-Over-Under-Redux", "--", "bin/rails", "db:migrate"
+      ).and_return(true)
+
+      expect(adapter_with_service.migrate("staging")).to be(true)
+    end
   end
 
   describe "#seed" do
@@ -54,13 +81,22 @@ RSpec.describe Switchyard::Adapters::Railway do
 
       expect(adapter.seed("pr-157")).to be(true)
     end
+
+    it "includes --service when service is configured on adapter" do
+      adapter_with_service = described_class.new(runner: runner, service: "NBA-Over-Under-Redux")
+      expect(runner).to receive(:system).with(
+        "railway", "ssh", "--environment", "pr-157", "--service", "NBA-Over-Under-Redux", "--", "bin/rails", "db:seed"
+      ).and_return(true)
+
+      expect(adapter_with_service.seed("pr-157")).to be(true)
+    end
   end
 
   describe "#resolve_base_environment" do
     it "returns staging when staging exists" do
       json = '[{ "name": "production" }, { "name": "staging" }]'
       expect(runner).to receive(:capture).with("railway", "environment", "list", "--json")
-        .and_return([json, double(success?: true)])
+                                         .and_return([json, double(success?: true)])
 
       expect(adapter.resolve_base_environment).to eq("staging")
     end
@@ -68,7 +104,7 @@ RSpec.describe Switchyard::Adapters::Railway do
     it "falls back to production when staging does not exist" do
       json = '[{ "name": "production" }]'
       expect(runner).to receive(:capture).with("railway", "environment", "list", "--json")
-        .and_return([json, double(success?: true)])
+                                         .and_return([json, double(success?: true)])
 
       expect(adapter.resolve_base_environment).to eq("production")
     end
@@ -129,9 +165,9 @@ RSpec.describe Switchyard::Adapters::Railway do
         "railway", "variables", "--environment", "staging", "--json"
       ).and_return(['{"PORT": "3000"}', double(success?: true)])
 
-      expect {
+      expect do
         adapter.database_url("staging")
-      }.to raise_error(Switchyard::Adapters::Railway::VariableNotFoundError, /DATABASE_URL.*found/)
+      end.to raise_error(Switchyard::Adapters::Railway::VariableNotFoundError, /DATABASE_URL.*found/)
     end
 
     it "raises an error if railway CLI fails" do
@@ -139,9 +175,9 @@ RSpec.describe Switchyard::Adapters::Railway do
         "railway", "variables", "--environment", "staging", "--json"
       ).and_return(["Project not found", double(success?: false, exitstatus: 1)])
 
-      expect {
+      expect do
         adapter.database_url("staging")
-      }.to raise_error(Switchyard::Adapters::Railway::CommandError, /Failed to fetch variables/)
+      end.to raise_error(Switchyard::Adapters::Railway::CommandError, /Failed to fetch variables/)
     end
   end
 

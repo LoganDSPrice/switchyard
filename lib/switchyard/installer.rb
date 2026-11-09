@@ -185,7 +185,7 @@ module Switchyard
       stdout, status = runner.capture("git", "remote", "get-url", "origin")
       return unless status&.success?
 
-      match = stdout.strip.match(/(?:github\.com[:\/])(?<owner>[\w\-]+)\/(?<repo>[\w\-\.]+?)(?:\.git)?\z/)
+      match = stdout.strip.match(%r{(?:github\.com[:/])(?<owner>[\w-]+)/(?<repo>[\w\-.]+?)(?:\.git)?\z})
       return unless match
 
       "https://github.com/#{match[:owner]}/#{match[:repo]}/settings/secrets/actions"

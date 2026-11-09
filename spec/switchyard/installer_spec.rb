@@ -246,9 +246,9 @@ RSpec.describe Switchyard::Installer do
 
     context "when destination is not a Rails directory" do
       it "raises a NotInRailsProjectError" do
-        expect {
+        expect do
           installer.install!
-        }.to raise_error(Switchyard::Installer::NotInRailsProjectError, /Rails project/i)
+        end.to raise_error(Switchyard::Installer::NotInRailsProjectError, /Rails project/i)
       end
     end
   end

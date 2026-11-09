@@ -71,7 +71,7 @@ module Switchyard
     attr_reader :runner
 
     def fetch_from_gh(identifier)
-      args = ["gh", "pr", "view"]
+      args = %w[gh pr view]
       args << identifier.to_s if identifier && identifier.to_s != "deploy"
       args += ["--json", "number,headRefName,headRepository"]
 
@@ -93,23 +93,17 @@ module Switchyard
 
     def fallback_to_git(identifier)
       stdout, status = runner.capture("git", "remote", "get-url", "origin")
-      unless status&.success?
-        raise Error, "Could not determine GitHub repository. Make sure git origin remote is set or gh CLI is installed."
-      end
+      raise Error, "Could not determine GitHub repository. Make sure git origin remote is set or gh CLI is installed." unless status&.success?
 
-      match = stdout.strip.match(/(?:github\.com[:\/])(?<owner>[\w\-]+)\/(?<repo>[\w\-\.]+?)(?:\.git)?\z/)
-      unless match
-        raise Error, "Could not determine GitHub repository from git remote. Make sure origin points to GitHub or gh CLI is installed."
-      end
+      match = stdout.strip.match(%r{(?:github\.com[:/])(?<owner>[\w-]+)/(?<repo>[\w\-.]+?)(?:\.git)?\z})
+      raise Error, "Could not determine GitHub repository from git remote. Make sure origin points to GitHub or gh CLI is installed." unless match
 
       repo = "#{match[:owner]}/#{match[:repo]}"
 
       branch_out, b_status = runner.capture("git", "branch", "--show-current")
       branch = b_status&.success? ? branch_out.strip : nil
 
-      if branch.to_s.empty?
-        raise Error, "Could not determine current branch. Please specify PR number explicitly or ensure branch is checked out."
-      end
+      raise Error, "Could not determine current branch. Please specify PR number explicitly or ensure branch is checked out." if branch.to_s.empty?
 
       number = identifier ? identifier.to_s.sub(/\Apr-?/i, "").to_i : nil
 

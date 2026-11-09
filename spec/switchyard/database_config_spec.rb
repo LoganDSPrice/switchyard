@@ -82,9 +82,9 @@ RSpec.describe Switchyard::DatabaseConfig do
       end
 
       it "raises a helpful error" do
-        expect {
+        expect do
           db_config.database_name("development")
-        }.to raise_error(Switchyard::DatabaseConfig::FileNotFoundError, /config\/database.yml not found/)
+        end.to raise_error(Switchyard::DatabaseConfig::FileNotFoundError, %r{config/database.yml not found})
       end
     end
   end

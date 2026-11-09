@@ -16,16 +16,18 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = Dir["lib/**/*.rb", "bin/*", "README.md", "LICENSE*"]
   spec.bindir = "bin"
-  spec.executables = ["switchyard", "dev", "staging", "production", "pr"]
+  spec.executables = %w[switchyard dev staging production pr]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "thor", "~> 1.3"
 
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rspec", "~> 3.12"
+  spec.add_development_dependency "rubocop", "~> 1.60"
 
   spec.post_install_message = <<~MSG
 

@@ -51,7 +51,7 @@ module Switchyard
       config_path = File.join(root_dir, CONFIG_FILENAME)
       return DEFAULT_CONFIG.dup unless File.exist?(config_path)
 
-      loaded = YAML.safe_load(File.read(config_path), permitted_classes: [Symbol]) || {}
+      loaded = YAML.safe_load_file(config_path, permitted_classes: [Symbol]) || {}
       deep_merge(DEFAULT_CONFIG, loaded)
     rescue StandardError
       DEFAULT_CONFIG.dup

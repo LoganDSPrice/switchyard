@@ -23,7 +23,7 @@ module Switchyard
           ON CONFLICT (key) DO UPDATE SET value = '#{environment}', updated_at = NOW();
         SQL
 
-        runner.system(%{psql #{target_db} -c "#{sql}"})
+        runner.system(%(psql #{target_db} -c "#{sql}"))
       end
 
       private

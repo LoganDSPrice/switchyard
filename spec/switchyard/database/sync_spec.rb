@@ -71,9 +71,9 @@ RSpec.describe Switchyard::Database::Sync do
       let(:target_env) { "production" }
 
       it "raises ProtectedEnvironmentError when force is false" do
-        expect {
+        expect do
           sync.run!
-        }.to raise_error(Switchyard::Database::Sync::ProtectedEnvironmentError, /Restoring into 'production' is blocked/)
+        end.to raise_error(Switchyard::Database::Sync::ProtectedEnvironmentError, /Restoring into 'production' is blocked/)
       end
 
       context "when force is true" do

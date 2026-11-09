@@ -1,0 +1,57 @@
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.0
+  SuggestExtensions: false
+  Exclude:
+    - "vendor/**/*"
+    - "bin/*"
+    - "db/schema.rb"
+
+Layout/LineLength:
+  Max: 160
+  Exclude:
+    - "spec/**/*"
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "*.gemspec"
+
+Metrics/MethodLength:
+  Max: 65
+  Exclude:
+    - "spec/**/*"
+
+Metrics/AbcSize:
+  Max: 65
+
+Metrics/ClassLength:
+  Max: 250
+
+Metrics/CyclomaticComplexity:
+  Max: 20
+
+Metrics/PerceivedComplexity:
+  Max: 20
+
+Metrics/ParameterLists:
+  Max: 6
+
+Naming/PredicateMethod:
+  AllowedMethods:
+    - deploy_pr
+    - run!
+    - install!
+
+Style/OptionalBooleanParameter:
+  Exclude:
+    - "lib/switchyard/cli.rb"
+
+Gemspec/DevelopmentDependencies:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes

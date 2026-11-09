@@ -74,9 +74,9 @@ RSpec.describe Switchyard::GitHub do
           "git", "remote", "get-url", "origin"
         ).and_return(["fatal: not a git repo", double(success?: false)])
 
-        expect {
+        expect do
           github.pr_info("157")
-        }.to raise_error(Switchyard::Error, /Could not determine GitHub repository/)
+        end.to raise_error(Switchyard::Error, /Could not determine GitHub repository/)
       end
     end
   end
@@ -156,9 +156,9 @@ RSpec.describe Switchyard::GitHub do
 
     it "raises an error if no open PRs exist" do
       allow(github).to receive(:list_prs).and_return([])
-      expect {
+      expect do
         github.select_pr(shell)
-      }.to raise_error(Switchyard::Error, /No open pull requests found/)
+      end.to raise_error(Switchyard::Error, /No open pull requests found/)
     end
   end
 end

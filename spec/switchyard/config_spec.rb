@@ -10,7 +10,7 @@ RSpec.describe Switchyard::Config do
   let(:dir) { Dir.mktmpdir }
 
   after do
-    FileUtils.remove_entry(dir) if File.exist?(dir)
+    FileUtils.rm_rf(dir)
   end
 
   context "when .switchyard.yml does not exist" do

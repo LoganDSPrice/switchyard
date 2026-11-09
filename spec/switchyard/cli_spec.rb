@@ -25,7 +25,7 @@ RSpec.describe Switchyard::CLI do
     it "delegates to the adapter" do
       expect(adapter).to receive(:console).with("staging")
 
-      described_class.start(["console", "staging"], config)
+      described_class.start(%w[console staging], config)
     end
   end
 
@@ -33,7 +33,7 @@ RSpec.describe Switchyard::CLI do
     it "delegates to the adapter" do
       expect(adapter).to receive(:logs).with("production")
 
-      described_class.start(["logs", "production"], config)
+      described_class.start(%w[logs production], config)
     end
   end
 
@@ -41,7 +41,7 @@ RSpec.describe Switchyard::CLI do
     it "delegates to the adapter" do
       expect(adapter).to receive(:migrate).with("staging")
 
-      described_class.start(["migrate", "staging"], config)
+      described_class.start(%w[migrate staging], config)
     end
   end
 
@@ -58,7 +58,7 @@ RSpec.describe Switchyard::CLI do
         force: false
       ).and_return(sync_double)
 
-      described_class.start(["restore", "staging"], config)
+      described_class.start(%w[restore staging], config)
     end
   end
 
@@ -70,19 +70,19 @@ RSpec.describe Switchyard::CLI do
     it "runs console on the resolved pr environment by default" do
       expect(adapter).to receive(:console).with("pr-123")
 
-      described_class.start(["pr", "123", "console"], config)
+      described_class.start(%w[pr 123 console], config)
     end
 
     it "runs logs on the resolved pr environment" do
       expect(adapter).to receive(:logs).with("pr-123")
 
-      described_class.start(["pr", "123", "logs"], config)
+      described_class.start(%w[pr 123 logs], config)
     end
 
     it "runs migrate on the resolved pr environment" do
       expect(adapter).to receive(:migrate).with("pr-123")
 
-      described_class.start(["pr", "123", "migrate"], config)
+      described_class.start(%w[pr 123 migrate], config)
     end
 
     describe "interactive PR selection" do
@@ -95,7 +95,7 @@ RSpec.describe Switchyard::CLI do
         expect(adapter).to receive(:resolve_pr_environment).with(157).and_return("pr-157")
         expect(adapter).to receive(:console).with("pr-157")
 
-        described_class.start(["pr", "console"], config)
+        described_class.start(%w[pr console], config)
       end
 
       it "defaults to console on selected PR when pr is called with no arguments" do
@@ -110,7 +110,7 @@ RSpec.describe Switchyard::CLI do
         expect(github).to receive(:list_prs).and_return([selected_pr])
 
         output = capture_stdout do
-          described_class.start(["pr", "list"], config)
+          described_class.start(%w[pr list], config)
         end
 
         expect(output).to include("#157 - test PR")
@@ -149,7 +149,7 @@ RSpec.describe Switchyard::CLI do
         ).and_return(sync_double)
 
         output = capture_stdout do
-          described_class.start(["pr", "157", "deploy"], config)
+          described_class.start(%w[pr 157 deploy], config)
         end
 
         expect(output).to include("Deploying PR #157 (test/preview-app-banner) to pr-157 on Railway from GitHub...")
@@ -181,7 +181,7 @@ RSpec.describe Switchyard::CLI do
         ).and_return(sync_double)
 
         output = capture_stdout do
-          described_class.start(["pr", "deploy"], config)
+          described_class.start(%w[pr deploy], config)
         end
 
         expect(output).to include("Deploying PR #157")
@@ -312,7 +312,7 @@ RSpec.describe Switchyard::CLI do
 
     it "still provides command-specific help when a command is given" do
       output = capture_stdout do
-        described_class.start(["help", "restore"], config)
+        described_class.start(%w[help restore], config)
       end
 
       expect(output).to include("restore [FROM] [TO]")

@@ -191,22 +191,27 @@ module Switchyard
       if installer.github_action_generated?
         puts "🤖 Generated .github/workflows/switchyard-cleanup-pr.yml!"
         puts "   To enable automated cleanup:"
-        if (tokens_url = installer.railway_tokens_url)
-          puts "   1. On Railway: Create a Project Token directly at:"
-          puts "      👉 #{tokens_url}"
-        else
-          puts "   1. On Railway: Project Settings → Tokens → New Token"
-        end
-        puts "      • Name suggestion: 'GitHub Actions - PR Cleanup' (Project Token)"
+        puts "   1. On Railway: Create an Account Token at:"
+        puts "      👉 #{Installer::RAILWAY_ACCOUNT_TOKENS_URL} (Account Settings → Tokens)"
+        puts "      • Scope: Select 'No workspace' (Account Token)"
+        puts "      • Name suggestion: 'GitHub Actions - PR Cleanup'"
+        puts "      ⚠️  Do NOT create a Project Token (cannot delete PR environments)"
+        puts "         or select a specific workspace (@railway/cli rejects workspace-scoped tokens)."
         if (secrets_url = installer.github_secrets_url)
-          puts "   2. On GitHub: Add the secret at:"
+          puts "   2. On GitHub: Add the repository secrets at:"
           puts "      👉 #{secrets_url}"
-          puts "      • Click 'New repository secret'"
+          puts "      • Click 'New repository secret' for each:"
         else
           puts "   2. On GitHub: Settings → Secrets and variables → Actions → New repository secret"
         end
-        puts "      • Name:   RAILWAY_TOKEN"
-        puts "      • Secret: [Paste the copied Railway token]"
+        puts "      • Name: RAILWAY_API_TOKEN"
+        puts "        Secret: [Paste the copied Account Token]"
+        puts "      • Name: RAILWAY_PROJECT_ID"
+        if (project_id = installer.railway_project_id)
+          puts "        Secret: #{project_id}"
+        else
+          puts "        Secret: [Your Railway project ID from `railway status --json`]"
+        end
       end
 
       if installer.git_safe_enabled?

@@ -177,6 +177,8 @@ module Switchyard
                 railway environment delete "$ENV_NAME" --yes
     YAML
 
+    attr_reader :generated_binstubs, :preserved_binstubs
+
     def initialize(destination: Dir.pwd, runner: ProcessRunner.new, git_safe: false, github_action: false)
       @destination = destination
       @runner = runner
@@ -184,6 +186,8 @@ module Switchyard
       @github_action = github_action
       @git_safe_enabled = false
       @github_action_generated = false
+      @generated_binstubs = []
+      @preserved_binstubs = []
     end
 
     def install!
@@ -261,12 +265,24 @@ module Switchyard
     def generate_binstubs!
       bin_dir = File.join(destination, "bin")
       FileUtils.mkdir_p(bin_dir)
+      @generated_binstubs = []
+      @preserved_binstubs = []
 
       BINSTUBS.each do |name, content|
         binstub_path = File.join(bin_dir, name)
+        if name == "dev" && custom_binstub?(binstub_path)
+          @preserved_binstubs << name
+          next
+        end
+
         File.write(binstub_path, content)
         FileUtils.chmod(0o755, binstub_path)
+        @generated_binstubs << name
       end
+    end
+
+    def custom_binstub?(path)
+      File.exist?(path) && !File.read(path).include?("Switchyard::CLI")
     end
 
     def generate_config!

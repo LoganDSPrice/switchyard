@@ -185,7 +185,10 @@ module Switchyard
       )
       installer.install!
       puts "✨ Switchyard installed successfully!"
-      puts "Generated binstubs in bin/: switchyard, dev, staging, production, pr"
+      puts "Generated binstubs in bin/: #{installer.generated_binstubs.join(', ')}"
+      if installer.preserved_binstubs.any?
+        puts "ℹ️  Preserved existing bin/dev (custom launcher detected). Run `bin/switchyard restore <env>` for local DB restore."
+      end
       puts "Generated configuration: .switchyard.yml"
 
       if installer.github_action_generated?

@@ -262,15 +262,51 @@ RSpec.describe Switchyard::CLI do
   end
 
   describe "#install" do
+    let(:default_binstubs) { %w[switchyard dev staging production pr] }
+
     it "invokes the installer with git_safe: false and github_action: false by default" do
-      installer_double = instance_double("Switchyard::Installer", install!: true, git_safe_enabled?: false, github_action_generated?: false)
+      installer_double = instance_double(
+        "Switchyard::Installer",
+        install!: true,
+        git_safe_enabled?: false,
+        github_action_generated?: false,
+        generated_binstubs: default_binstubs,
+        preserved_binstubs: []
+      )
       expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false, github_action: false).and_return(installer_double)
 
       described_class.start(["install"], config)
     end
 
+    it "prints a preservation notice when an existing bin/dev is preserved" do
+      installer_double = instance_double(
+        "Switchyard::Installer",
+        install!: true,
+        git_safe_enabled?: false,
+        github_action_generated?: false,
+        generated_binstubs: %w[switchyard staging production pr],
+        preserved_binstubs: ["dev"]
+      )
+      expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false, github_action: false).and_return(installer_double)
+
+      output = capture_stdout do
+        described_class.start(["install"], config)
+      end
+
+      expect(output).to include("Generated binstubs in bin/: switchyard, staging, production, pr")
+      expect(output).to include("Preserved existing bin/dev")
+      expect(output).to include("bin/switchyard restore")
+    end
+
     it "passes git_safe: true when --git-safe flag is supplied" do
-      installer_double = instance_double("Switchyard::Installer", install!: true, git_safe_enabled?: true, github_action_generated?: false)
+      installer_double = instance_double(
+        "Switchyard::Installer",
+        install!: true,
+        git_safe_enabled?: true,
+        github_action_generated?: false,
+        generated_binstubs: default_binstubs,
+        preserved_binstubs: []
+      )
       expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: true, github_action: false).and_return(installer_double)
 
       described_class.start(["install", "--git-safe"], config)
@@ -282,6 +318,8 @@ RSpec.describe Switchyard::CLI do
         install!: true,
         git_safe_enabled?: false,
         github_action_generated?: true,
+        generated_binstubs: default_binstubs,
+        preserved_binstubs: [],
         railway_project_id: "proj-123",
         github_secrets_url: "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions"
       )
@@ -310,6 +348,8 @@ RSpec.describe Switchyard::CLI do
         install!: true,
         git_safe_enabled?: false,
         github_action_generated?: true,
+        generated_binstubs: default_binstubs,
+        preserved_binstubs: [],
         railway_project_id: nil,
         github_secrets_url: nil
       )
@@ -333,6 +373,8 @@ RSpec.describe Switchyard::CLI do
         install!: true,
         git_safe_enabled?: false,
         github_action_generated?: true,
+        generated_binstubs: default_binstubs,
+        preserved_binstubs: [],
         github_secrets_url: "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions"
       )
       allow(installer_double).to receive(:railway_project_id).and_return(nil, "proj-linked")
@@ -356,6 +398,8 @@ RSpec.describe Switchyard::CLI do
         install!: true,
         git_safe_enabled?: false,
         github_action_generated?: true,
+        generated_binstubs: default_binstubs,
+        preserved_binstubs: [],
         railway_project_id: nil,
         github_secrets_url: nil
       )

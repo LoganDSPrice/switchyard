@@ -276,13 +276,13 @@ RSpec.describe Switchyard::CLI do
       described_class.start(["install", "--git-safe"], config)
     end
 
-    it "passes github_action: true when --github-action flag is supplied" do
+    it "passes github_action: true when --github-action flag is supplied and prints Account Token + RAILWAY_PROJECT_ID guidance" do
       installer_double = instance_double(
         "Switchyard::Installer",
         install!: true,
         git_safe_enabled?: false,
         github_action_generated?: true,
-        railway_tokens_url: "https://railway.com/project/proj-123/settings/tokens?environmentId=env-456",
+        railway_project_id: "proj-123",
         github_secrets_url: "https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions"
       )
       expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false, github_action: true).and_return(installer_double)
@@ -291,9 +291,39 @@ RSpec.describe Switchyard::CLI do
         described_class.start(["install", "--github-action"], config)
       end
 
-      expect(output).to include("https://railway.com/project/proj-123/settings/tokens?environmentId=env-456")
+      expect(output).to include("https://railway.com/account/tokens")
+      expect(output).to include("Account Settings → Tokens")
+      expect(output).to include("No workspace")
+      expect(output).to include("Do NOT create a Project Token")
+      expect(output).to include("specific workspace")
       expect(output).to include("https://github.com/LoganDSPrice/NBA-Over-Under-Redux/settings/secrets/actions")
-      expect(output).to include("Click 'New repository secret'")
+      expect(output).to include("RAILWAY_API_TOKEN")
+      expect(output).to include("RAILWAY_PROJECT_ID")
+      expect(output).to include("proj-123")
+      expect(output).not_to include("RAILWAY_TOKEN\n")
+      expect(output).not_to include("railway.com/project/")
+    end
+
+    it "prints railway status --json fallback instructions when railway_project_id is unavailable" do
+      installer_double = instance_double(
+        "Switchyard::Installer",
+        install!: true,
+        git_safe_enabled?: false,
+        github_action_generated?: true,
+        railway_project_id: nil,
+        github_secrets_url: nil
+      )
+      expect(Switchyard::Installer).to receive(:new).with(destination: Dir.pwd, git_safe: false, github_action: true).and_return(installer_double)
+
+      output = capture_stdout do
+        described_class.start(["install", "--github-action"], config)
+      end
+
+      expect(output).to include("https://railway.com/account/tokens")
+      expect(output).to include("No workspace")
+      expect(output).to include("RAILWAY_API_TOKEN")
+      expect(output).to include("RAILWAY_PROJECT_ID")
+      expect(output).to include("railway status --json")
     end
   end
 

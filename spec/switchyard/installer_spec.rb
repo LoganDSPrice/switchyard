@@ -2,6 +2,7 @@
 
 require "spec_helper"
 require "tmpdir"
+require "yaml"
 require "switchyard/installer"
 
 RSpec.describe Switchyard::Installer do
@@ -71,13 +72,33 @@ RSpec.describe Switchyard::Installer do
       context "when github_action option is enabled" do
         subject(:installer) { described_class.new(destination: temp_dir, runner: runner, github_action: true) }
 
-        it "creates .github/workflows/switchyard-cleanup-pr.yml" do
+        it "creates .github/workflows/switchyard-cleanup-pr.yml with RAILWAY_API_TOKEN, non-interactive link, and existence guard" do
           installer.install!
 
           workflow_path = File.join(temp_dir, ".github", "workflows", "switchyard-cleanup-pr.yml")
           expect(File.exist?(workflow_path)).to be true
-          expect(File.read(workflow_path)).to include("Switchyard Cleanup PR Environment")
-          expect(File.read(workflow_path)).to include("railway environment delete")
+
+          content = File.read(workflow_path)
+          parsed = YAML.safe_load(content)
+          expect(parsed["name"]).to eq("Switchyard Cleanup PR Environment")
+
+          cleanup_step = parsed.dig("jobs", "cleanup", "steps").find { |step| step["name"] == "Decommission Railway PR Environment" }
+          expect(cleanup_step).not_to be_nil
+          expect(cleanup_step["env"]).to eq(
+            "RAILWAY_API_TOKEN" => "${{ secrets.RAILWAY_API_TOKEN }}",
+            "RAILWAY_PROJECT_ID" => "${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID }}"
+          )
+          expect(content).not_to include("RAILWAY_TOKEN:")
+          expect(content).not_to include("secrets.RAILWAY_TOKEN")
+
+          run_script = cleanup_step["run"]
+          expect(run_script).to include('if [ -z "$RAILWAY_API_TOKEN" ]; then')
+          expect(run_script).to include('if [ -z "$RAILWAY_PROJECT_ID" ]; then')
+          expect(run_script).to include('railway link --project "$RAILWAY_PROJECT_ID" --environment production')
+          expect(run_script).to include("railway environment list --json")
+          expect(run_script).to include("jq -e --arg name")
+          expect(run_script).to include("exit 0")
+          expect(run_script).to include('railway environment delete "$ENV_NAME" --yes')
           expect(installer.github_action_generated?).to be true
         end
       end
@@ -139,8 +160,14 @@ RSpec.describe Switchyard::Installer do
       end
     end
 
-    describe "#railway_tokens_url" do
-      context "when railway status returns project and environment IDs" do
+    describe "RAILWAY_ACCOUNT_TOKENS_URL" do
+      it "points to Railway account tokens rather than project tokens" do
+        expect(described_class::RAILWAY_ACCOUNT_TOKENS_URL).to eq("https://railway.com/account/tokens")
+      end
+    end
+
+    describe "#railway_project_id" do
+      context "when railway status returns nested project id" do
         let(:json_output) do
           <<~JSON
             {
@@ -150,18 +177,16 @@ RSpec.describe Switchyard::Installer do
           JSON
         end
 
-        it "returns the direct tokens URL with environmentId" do
+        it "extracts the project id" do
           expect(runner).to receive(:capture).with(
             "railway", "status", "--json"
           ).and_return([json_output, double(success?: true)])
 
-          expect(installer.railway_tokens_url).to eq(
-            "https://railway.com/project/proj-123/settings/tokens?environmentId=env-456"
-          )
+          expect(installer.railway_project_id).to eq("proj-123")
         end
       end
 
-      context "when railway status returns standard root project schema with environments edges" do
+      context "when railway status returns standard root project schema" do
         let(:json_output) do
           <<~JSON
             {
@@ -181,14 +206,12 @@ RSpec.describe Switchyard::Installer do
           JSON
         end
 
-        it "extracts project id and production environment id from edges" do
+        it "extracts root project id" do
           expect(runner).to receive(:capture).with(
             "railway", "status", "--json"
           ).and_return([json_output, double(success?: true)])
 
-          expect(installer.railway_tokens_url).to eq(
-            "https://railway.com/project/e6cef8da-25b2-4aaa-a7cb-22406df4eeb6/settings/tokens?environmentId=6d8b8757-d8dd-4346-87e2-f373e05dbfc3"
-          )
+          expect(installer.railway_project_id).to eq("e6cef8da-25b2-4aaa-a7cb-22406df4eeb6")
         end
 
         it "extracts JSON cleanly even when CLI output contains update banners or warnings" do
@@ -197,29 +220,7 @@ RSpec.describe Switchyard::Installer do
             "railway", "status", "--json"
           ).and_return([banner_output, double(success?: true)])
 
-          expect(installer.railway_tokens_url).to eq(
-            "https://railway.com/project/e6cef8da-25b2-4aaa-a7cb-22406df4eeb6/settings/tokens?environmentId=6d8b8757-d8dd-4346-87e2-f373e05dbfc3"
-          )
-        end
-      end
-
-      context "when railway status returns project ID without environment ID" do
-        let(:json_output) do
-          <<~JSON
-            {
-              "project": { "id": "proj-123", "name": "MyApp" }
-            }
-          JSON
-        end
-
-        it "returns the direct tokens URL without environmentId" do
-          expect(runner).to receive(:capture).with(
-            "railway", "status", "--json"
-          ).and_return([json_output, double(success?: true)])
-
-          expect(installer.railway_tokens_url).to eq(
-            "https://railway.com/project/proj-123/settings/tokens"
-          )
+          expect(installer.railway_project_id).to eq("e6cef8da-25b2-4aaa-a7cb-22406df4eeb6")
         end
       end
 
@@ -229,7 +230,7 @@ RSpec.describe Switchyard::Installer do
             "railway", "status", "--json"
           ).and_return(["Project not found", double(success?: false)])
 
-          expect(installer.railway_tokens_url).to be_nil
+          expect(installer.railway_project_id).to be_nil
         end
       end
 
@@ -239,7 +240,7 @@ RSpec.describe Switchyard::Installer do
             "railway", "status", "--json"
           ).and_return(["not json", double(success?: true)])
 
-          expect(installer.railway_tokens_url).to be_nil
+          expect(installer.railway_project_id).to be_nil
         end
       end
     end

@@ -133,7 +133,9 @@ module Switchyard
         default_db_source: auto
     YAML
 
-    GITHUB_ACTION_TEMPLATE = <<~YAML
+    RAILWAY_ACCOUNT_TOKENS_URL = "https://railway.com/account/tokens"
+
+    GITHUB_ACTION_TEMPLATE = <<~YAML.freeze
       name: Switchyard Cleanup PR Environment
 
       on:
@@ -149,8 +151,30 @@ module Switchyard
 
             - name: Decommission Railway PR Environment
               env:
-                RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-              run: railway environment delete "pr-${{ github.event.pull_request.number }}" --yes
+                RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+                RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID }}
+              run: |
+                if [ -z "$RAILWAY_API_TOKEN" ]; then
+                  echo "::error::RAILWAY_API_TOKEN secret is not set. Create an Account Token (with 'No workspace' selected) at #{RAILWAY_ACCOUNT_TOKENS_URL}."
+                  exit 1
+                fi
+
+                if [ -z "$RAILWAY_PROJECT_ID" ]; then
+                  echo "::error::RAILWAY_PROJECT_ID is not set. Add it as a GitHub Actions secret or variable."
+                  exit 1
+                fi
+
+                ENV_NAME="pr-${{ github.event.pull_request.number }}"
+
+                railway link --project "$RAILWAY_PROJECT_ID" --environment production
+
+                ENV_LIST_JSON="$(railway environment list --json)"
+                if ! printf '%s\\n' "$ENV_LIST_JSON" | jq -e --arg name "$ENV_NAME" '(if type == "array" then . else (.environments // []) end)[] | select(.name == $name)' > /dev/null; then
+                  echo "No Railway environment '$ENV_NAME' found; skipping cleanup."
+                  exit 0
+                fi
+
+                railway environment delete "$ENV_NAME" --yes
     YAML
 
     def initialize(destination: Dir.pwd, runner: ProcessRunner.new, git_safe: false, github_action: false)
@@ -191,7 +215,7 @@ module Switchyard
       "https://github.com/#{match[:owner]}/#{match[:repo]}/settings/secrets/actions"
     end
 
-    def railway_tokens_url
+    def railway_project_id
       stdout, status = runner.capture("railway", "status", "--json")
       return unless status&.success?
 
@@ -199,21 +223,7 @@ module Switchyard
       return unless json_match
 
       parsed = JSON.parse(json_match)
-      project_id = parsed["id"] || parsed.dig("project", "id")
-      return unless project_id
-
-      env_id = parsed.dig("environment", "id")
-      if env_id.nil? && parsed["environments"]
-        edges = parsed.dig("environments", "edges") || []
-        prod_edge = edges.find { |e| e.dig("node", "name") == "production" } || edges.first
-        env_id = prod_edge&.dig("node", "id")
-      end
-
-      if env_id
-        "https://railway.com/project/#{project_id}/settings/tokens?environmentId=#{env_id}"
-      else
-        "https://railway.com/project/#{project_id}/settings/tokens"
-      end
+      parsed["id"] || parsed.dig("project", "id")
     rescue StandardError
       nil
     end

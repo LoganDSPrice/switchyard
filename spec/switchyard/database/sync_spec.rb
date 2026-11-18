@@ -32,7 +32,7 @@ RSpec.describe Switchyard::Database::Sync do
         ).and_return(true)
 
         expect(runner).to receive(:system).with(
-          satisfy { |cmd| cmd.include?("psql myapp_development") && cmd.include?("ar_internal_metadata") }
+          satisfy { |cmd| cmd.include?("psql myapp_development -X") && cmd.include?("ar_internal_metadata") }
         ).and_return(true)
 
         expect(sync.run!).to be(true)

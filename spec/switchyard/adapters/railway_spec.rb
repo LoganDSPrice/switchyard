@@ -8,6 +8,10 @@ RSpec.describe Switchyard::Adapters::Railway do
 
   let(:runner) { instance_double("Switchyard::ProcessRunner") }
 
+  before do
+    allow(runner).to receive(:capture).with("railway", "service", "list", any_args).and_return(["[]", double(success?: true)])
+  end
+
   describe "#console" do
     it "executes rails console remotely inside the container via ssh" do
       expect(runner).to receive(:exec).with(
@@ -51,6 +55,19 @@ RSpec.describe Switchyard::Adapters::Railway do
       )
 
       adapter_with_service.logs("staging")
+    end
+
+    it "auto-detects the app service when no service is configured on adapter" do
+      services_with_pg = '[{ "id": "srv-db", "name": "Postgres", "source": { "image": "postgres:18" } }, { "id": "srv-app", "name": "switchyard-canary", "source": { "repo": "LoganDSPrice/switchyard-canary" } }]'
+      expect(runner).to receive(:capture).with(
+        "railway", "service", "list", "--environment", "pr-3", "--json"
+      ).and_return([services_with_pg, double(success?: true)])
+
+      expect(runner).to receive(:exec).with(
+        "railway", "logs", "--environment", "pr-3", "--service", "switchyard-canary", "--lines", "10"
+      )
+
+      adapter.logs("pr-3", "--lines", "10")
     end
   end
 
@@ -290,7 +307,7 @@ RSpec.describe Switchyard::Adapters::Railway do
     end
 
     context "when PR environment does not exist yet" do
-      it "provisions environment non-interactively, verifies source.branch and PORT, and restores the prior linked environment from environment list" do
+      it "provisions environment non-interactively with --service-config, verifies source.branch and PORT, and restores the prior linked environment from environment list" do
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
         ).and_return([environments_json_linked, double(success?: true)])
@@ -298,12 +315,16 @@ RSpec.describe Switchyard::Adapters::Railway do
         expect(runner).not_to receive(:capture).with("railway", "status", any_args)
 
         expect(runner).to receive(:capture).with(
-          "railway", "environment", "new", "pr-157", "--duplicate", "staging", "--json"
-        ).and_return(['{"name":"pr-157"}', double(success?: true)])
+          "railway", "service", "list", "--environment", "staging", "--json"
+        ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "list", "--environment", "pr-157", "--json"
-        ).and_return([services_json, double(success?: true)])
+          "railway", "environment", "new", "pr-157",
+          "--duplicate", "staging",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
 
         expect(runner).to receive(:capture).with(
           "railway", "environment", "config", "--environment", "pr-157", "--json"
@@ -339,18 +360,58 @@ RSpec.describe Switchyard::Adapters::Railway do
         expect(result).to be(true)
       end
 
+      it "skips railway environment edit when railway environment new --service-config already applied the target branch and PORT" do
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([environments_json_linked, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--environment", "staging", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "new", "pr-157",
+          "--duplicate", "staging",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return([env_config_updated_json, double(success?: true)])
+
+        expect(runner).not_to receive(:capture).with("railway", "environment", "edit", any_args)
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "link", "production", "--json"
+        ).and_return(['{"name":"production"}', double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          port: 80
+        )
+        expect(result).to be(true)
+      end
+
       it "waits for async environment duplication and retries edit if post-edit config still shows the base branch" do
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
         ).and_return([environments_json_linked, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "environment", "new", "pr-157", "--duplicate", "production", "--json"
-        ).and_return(['{"name":"pr-157"}', double(success?: true)])
+          "railway", "service", "list", "--environment", "production", "--json"
+        ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "list", "--environment", "pr-157", "--json"
-        ).and_return([services_json, double(success?: true)])
+          "railway", "environment", "new", "pr-157",
+          "--duplicate", "production",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
 
         expect(runner).to receive(:capture).with(
           "railway", "environment", "config", "--environment", "pr-157", "--json"
@@ -393,12 +454,16 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([environments_json_linked, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "environment", "new", "pr-157", "--duplicate", "staging", "--json"
-        ).and_return(['{"name":"pr-157"}', double(success?: true)])
+          "railway", "service", "list", "--environment", "staging", "--json"
+        ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "list", "--environment", "pr-157", "--json"
-        ).and_return([services_json, double(success?: true)])
+          "railway", "environment", "new", "pr-157",
+          "--duplicate", "staging",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
 
         allow(runner).to receive(:capture).with(
           "railway", "environment", "config", "--environment", "pr-157", "--json"
@@ -428,12 +493,16 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([environments_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "environment", "new", "pr-157", "--duplicate", "staging", "--json"
-        ).and_return(['{"name":"pr-157"}', double(success?: true)])
+          "railway", "service", "list", "--environment", "staging", "--json"
+        ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "list", "--environment", "pr-157", "--json"
-        ).and_return([services_json, double(success?: true)])
+          "railway", "environment", "new", "pr-157",
+          "--duplicate", "staging",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
 
         in_flight_json = '[{ "id": "dep-old-main", "status": "BUILDING" }]'
         expect(runner).to receive(:capture).with(
@@ -482,12 +551,16 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([prod_only_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "environment", "new", "pr-157", "--duplicate", "production", "--json"
-        ).and_return(['{"name":"pr-157"}', double(success?: true)])
+          "railway", "service", "list", "--environment", "production", "--json"
+        ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "list", "--environment", "pr-157", "--json"
-        ).and_return([services_json, double(success?: true)])
+          "railway", "environment", "new", "pr-157",
+          "--duplicate", "production",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
 
         expect(runner).to receive(:capture).with(
           "railway", "environment", "config", "--environment", "pr-157", "--json"
@@ -507,6 +580,57 @@ RSpec.describe Switchyard::Adapters::Railway do
           "-m", "Deploy PR #157 (test/preview-app-banner)",
           "--json"
         ).and_return(['{"committed":true}', double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          port: 80
+        )
+        expect(result).to be(true)
+      end
+
+      it "resolves service ID from resolved base environment (production) when newly duplicated PR environment has no services yet and staging does not exist" do
+        prod_only_object_json = '{"environments":[{"id":"env-1","name":"production","isLinked":true}]}'
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([prod_only_object_json, double(success?: true)])
+
+        expect(runner).not_to receive(:capture).with(
+          "railway", "service", "list", "--environment", "staging", "--json"
+        )
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--environment", "production", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "new", "pr-157",
+          "--duplicate", "production",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "--json"
+        ).and_return(['{"name":"pr-157"}', double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return(
+          [env_config_with_repo_json, double(success?: true)],
+          [env_config_updated_json, double(success?: true)]
+        )
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "edit",
+          "--environment", "pr-157",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(['{"committed":true}', double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "link", "production", "--json"
+        ).and_return(['{"name":"production"}', double(success?: true)])
 
         result = adapter.deploy_pr(
           "pr-157",

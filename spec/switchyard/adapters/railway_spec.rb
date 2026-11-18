@@ -215,12 +215,39 @@ RSpec.describe Switchyard::Adapters::Railway do
       JSON
     end
 
+    let(:env_config_with_repo_json) do
+      <<~JSON
+        {
+          "services": {
+            "srv-1": {
+              "source": {
+                "repo": "LoganDSPrice/NBA-Over-Under-Redux",
+                "branch": "main"
+              }
+            }
+          }
+        }
+      JSON
+    end
+
+    let(:env_config_without_repo_json) do
+      <<~JSON
+        {
+          "services": {
+            "srv-1": {
+              "source": {}
+            }
+          }
+        }
+      JSON
+    end
+
     before do
       allow(runner).to receive(:capture).with("railway", "deployment", "list", any_args).and_return(["[]", double(success?: true)])
     end
 
     context "when PR environment does not exist yet" do
-      it "provisions environment non-interactively with --json duplicating staging and connects the service to the GitHub branch" do
+      it "provisions environment non-interactively with --json duplicating staging and updates source.branch and PORT via railway environment edit" do
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
         ).and_return([environments_json, double(success?: true)])
@@ -234,18 +261,22 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "variable", "set", "PORT=80",
-          "--environment", "pr-157",
-          "--service", "NBA-Over-Under-Redux"
-        ).and_return(["Set PORT=80", double(success?: true)])
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return([env_config_with_repo_json, double(success?: true)])
+
+        expect(runner).not_to receive(:capture).with("railway", "service", "source", "connect", any_args)
+        expect(runner).not_to receive(:capture).with("railway", "variable", "set", any_args)
+        expect(runner).not_to receive(:capture).with("railway", "environment", "edit", "--environment", "staging", any_args)
+        expect(runner).not_to receive(:capture).with("railway", "environment", "edit", "--environment", "production", any_args)
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "source", "connect",
+          "railway", "environment", "edit",
           "--environment", "pr-157",
-          "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
-          "--branch", "test/preview-app-banner",
-          "--service", "NBA-Over-Under-Redux"
-        ).and_return(["Connected source", double(success?: true)])
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(['{"committed":true}', double(success?: true)])
 
         result = adapter.deploy_pr(
           "pr-157",
@@ -269,16 +300,10 @@ RSpec.describe Switchyard::Adapters::Railway do
           "railway", "service", "list", "--environment", "pr-157", "--json"
         ).and_return([services_json, double(success?: true)])
 
-        expect(runner).to receive(:capture).with(
-          "railway", "variable", "set", "PORT=80",
-          "--environment", "pr-157",
-          "--service", "NBA-Over-Under-Redux"
-        ).and_return(["Set PORT=80", double(success?: true)])
-
         in_flight_json = '[{ "id": "dep-old-main", "status": "BUILDING" }]'
         expect(runner).to receive(:capture).with(
           "railway", "deployment", "list",
-          "--service", "NBA-Over-Under-Redux",
+          "--service", "srv-1",
           "--environment", "pr-157",
           "--json"
         ).and_return([in_flight_json, double(success?: true)])
@@ -289,12 +314,19 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return(["Cancelled", double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "source", "connect",
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return([env_config_with_repo_json, double(success?: true)])
+
+        expect(runner).not_to receive(:capture).with("railway", "service", "source", "connect", any_args)
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "edit",
           "--environment", "pr-157",
-          "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
-          "--branch", "test/preview-app-banner",
-          "--service", "NBA-Over-Under-Redux"
-        ).and_return(["Connected source", double(success?: true)])
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(['{"committed":true}', double(success?: true)])
 
         result = adapter.deploy_pr(
           "pr-157",
@@ -305,7 +337,7 @@ RSpec.describe Switchyard::Adapters::Railway do
         expect(result).to be(true)
       end
 
-      it "falls back to duplicating production if staging does not exist on Railway" do
+      it "falls back to duplicating production if staging does not exist on Railway without mutating production" do
         prod_only_json = '[{ "id": "env-1", "name": "production" }]'
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
@@ -320,18 +352,20 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "variable", "set", "PORT=80",
-          "--environment", "pr-157",
-          "--service", "NBA-Over-Under-Redux"
-        ).and_return(["Set PORT=80", double(success?: true)])
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return([env_config_with_repo_json, double(success?: true)])
+
+        expect(runner).not_to receive(:capture).with("railway", "service", "source", "connect", any_args)
+        expect(runner).not_to receive(:capture).with("railway", "environment", "edit", "--environment", "production", any_args)
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "source", "connect",
+          "railway", "environment", "edit",
           "--environment", "pr-157",
-          "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
-          "--branch", "test/preview-app-banner",
-          "--service", "NBA-Over-Under-Redux"
-        ).and_return(["Connected source", double(success?: true)])
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(['{"committed":true}', double(success?: true)])
 
         result = adapter.deploy_pr(
           "pr-157",
@@ -354,7 +388,7 @@ RSpec.describe Switchyard::Adapters::Railway do
         JSON
       end
 
-      it "skips environment creation and connects the service to GitHub" do
+      it "skips environment creation and updates only the PR environment via railway environment edit" do
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
         ).and_return([environments_json_with_pr, double(success?: true)])
@@ -368,18 +402,20 @@ RSpec.describe Switchyard::Adapters::Railway do
         ).and_return([services_json, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
-          "railway", "variable", "set", "PORT=80",
-          "--environment", "pr-157",
-          "--service", "NBA-Over-Under-Redux"
-        ).and_return(["Set PORT=80", double(success?: true)])
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return([env_config_with_repo_json, double(success?: true)])
+
+        expect(runner).not_to receive(:capture).with("railway", "service", "source", "connect", any_args)
+        expect(runner).not_to receive(:capture).with("railway", "variable", "set", any_args)
 
         expect(runner).to receive(:capture).with(
-          "railway", "service", "source", "connect",
+          "railway", "environment", "edit",
           "--environment", "pr-157",
-          "--repo", "LoganDSPrice/NBA-Over-Under-Redux",
-          "--branch", "test/preview-app-banner",
-          "--service", "NBA-Over-Under-Redux"
-        ).and_return(["Connected source", double(success?: true)])
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "--service-config", "srv-1", "variables.PORT.value", "80",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(['{"committed":true}', double(success?: true)])
 
         result = adapter.deploy_pr(
           "pr-157",
@@ -388,6 +424,171 @@ RSpec.describe Switchyard::Adapters::Railway do
           port: 80
         )
         expect(result).to be(true)
+      end
+
+      it "includes source.repo in railway environment edit when the environment does not already have source.repo connected" do
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([environments_json_with_pr, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--environment", "pr-157", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return([env_config_without_repo_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "edit",
+          "--environment", "pr-157",
+          "--service-config", "srv-1", "source.repo", "LoganDSPrice/NBA-Over-Under-Redux",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(['{"committed":true}', double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner"
+        )
+        expect(result).to be(true)
+      end
+
+      it "resolves explicit service name to service ID from railway service list" do
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([environments_json_with_pr, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--environment", "pr-157", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return([env_config_with_repo_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "edit",
+          "--environment", "pr-157",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(['{"committed":true}', double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          service: "NBA-Over-Under-Redux"
+        )
+        expect(result).to be(true)
+      end
+
+      it "falls back to explicit service name and passes source.repo when service list and environment config fail" do
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([environments_json_with_pr, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--environment", "pr-157", "--json"
+        ).and_return(["", double(success?: false)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return(["", double(success?: false)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "edit",
+          "--environment", "pr-157",
+          "--service-config", "NBA-Over-Under-Redux", "source.repo", "LoganDSPrice/NBA-Over-Under-Redux",
+          "--service-config", "NBA-Over-Under-Redux", "source.branch", "test/preview-app-banner",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(['{"committed":true}', double(success?: true)])
+
+        result = adapter.deploy_pr(
+          "pr-157",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "test/preview-app-banner",
+          service: "NBA-Over-Under-Redux"
+        )
+        expect(result).to be(true)
+      end
+
+      it "raises CommandError when railway environment edit fails" do
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "list", "--json"
+        ).and_return([environments_json_with_pr, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "service", "list", "--environment", "pr-157", "--json"
+        ).and_return([services_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "config", "--environment", "pr-157", "--json"
+        ).and_return([env_config_with_repo_json, double(success?: true)])
+
+        expect(runner).to receive(:capture).with(
+          "railway", "environment", "edit",
+          "--environment", "pr-157",
+          "--service-config", "srv-1", "source.branch", "test/preview-app-banner",
+          "-m", "Deploy PR #157 (test/preview-app-banner)",
+          "--json"
+        ).and_return(["Service not found", double(success?: false, exitstatus: 1)])
+
+        expect do
+          adapter.deploy_pr(
+            "pr-157",
+            repo: "LoganDSPrice/NBA-Over-Under-Redux",
+            branch: "test/preview-app-banner"
+          )
+        end.to raise_error(Switchyard::Adapters::Railway::CommandError, /Failed to update environment 'pr-157'/)
+      end
+    end
+
+    describe "regression guard against global source mutation" do
+      it "never invokes railway service source connect or mutates base environments" do
+        captured_commands = []
+        allow(runner).to receive(:capture) do |*args|
+          captured_commands << args
+          case args[0..2]
+          when %w[railway environment list]
+            [environments_json, double(success?: true)]
+          when %w[railway environment new]
+            ['{"name":"pr-170"}', double(success?: true)]
+          when %w[railway service list]
+            [services_json, double(success?: true)]
+          when %w[railway deployment list]
+            ["[]", double(success?: true)]
+          when %w[railway environment config]
+            [env_config_with_repo_json, double(success?: true)]
+          when %w[railway environment edit]
+            ['{"committed":true}', double(success?: true)]
+          else
+            ["", double(success?: false)]
+          end
+        end
+
+        adapter.deploy_pr(
+          "pr-170",
+          repo: "LoganDSPrice/NBA-Over-Under-Redux",
+          branch: "feat/scoreboard-stakes-argon",
+          base_environment: "production",
+          port: 80
+        )
+
+        expect(captured_commands).not_to include(array_including("source", "connect"))
+        mutating_commands = captured_commands.select do |cmd|
+          [%w[railway environment edit], %w[railway variable set]].include?(cmd[0..2])
+        end
+        expect(mutating_commands).not_to be_empty
+        mutating_commands.each do |cmd|
+          expect(cmd).to include("--environment", "pr-170")
+          expect(cmd).not_to include("production")
+          expect(cmd).not_to include("staging")
+        end
       end
     end
   end

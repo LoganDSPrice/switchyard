@@ -10,8 +10,8 @@ module Switchyard
       class VariableNotFoundError < Error; end
 
       DATABASE_KEYS = %w[DATABASE_PUBLIC_URL DATABASE_URL].freeze
-      MAX_ENV_READY_ATTEMPTS = 5
-      MAX_EDIT_ATTEMPTS = 3
+      MAX_ENV_READY_ATTEMPTS = 10
+      MAX_EDIT_ATTEMPTS = 5
       RETRY_DELAY_SECONDS = 2
 
       attr_reader :service
@@ -22,35 +22,22 @@ module Switchyard
       end
 
       def console(environment, *args, service: nil)
-        svc = service || @service
-        cmd = ["railway", "ssh", "--environment", environment.to_s]
-        cmd += ["--service", svc.to_s] if svc
-        cmd += ["--", "bin/rails", "console", *args]
-        runner.exec(*cmd)
+        runner.exec(*ssh_rails_command(environment, "console", *args, service: service))
       end
 
       def logs(environment, *args, service: nil)
-        svc = service || @service
+        svc = service || @service || default_app_service(environment)
         cmd = ["railway", "logs", "--environment", environment.to_s]
         cmd += ["--service", svc.to_s] if svc
-        cmd += args
-        runner.exec(*cmd)
+        runner.exec(*(cmd + args))
       end
 
       def migrate(environment, *args, service: nil)
-        svc = service || @service
-        cmd = ["railway", "ssh", "--environment", environment.to_s]
-        cmd += ["--service", svc.to_s] if svc
-        cmd += ["--", "bin/rails", "db:migrate", *args]
-        runner.system(*cmd)
+        runner.system(*ssh_rails_command(environment, "db:migrate", *args, service: service))
       end
 
       def seed(environment, *args, service: nil)
-        svc = service || @service
-        cmd = ["railway", "ssh", "--environment", environment.to_s]
-        cmd += ["--service", svc.to_s] if svc
-        cmd += ["--", "bin/rails", "db:seed", *args]
-        runner.system(*cmd)
+        runner.system(*ssh_rails_command(environment, "db:seed", *args, service: service))
       end
 
       def resolve_base_environment
@@ -88,17 +75,20 @@ module Switchyard
       def deploy_pr(environment, repo:, branch:, service: nil, base_environment: "staging", port: nil)
         env_entries = fetch_environments
         environments = env_entries.map { |e| e["name"] }
+        resolved_base = resolve_duplicate_base(base_environment, environments)
         created = !environments.include?(environment.to_s)
         previous_env = created ? linked_environment_name(env_entries) : nil
+        lookup_env = created ? nil : environment
 
-        create_environment!(environment, duplicate_from: base_environment, existing_environments: environments) if created
-
-        resolved_service = resolve_service_id(service || @service, repo: repo, environment: environment, base_environment: base_environment)
+        resolved_service = resolve_service_id(service || @service, repo: repo, environment: lookup_env, base_environment: resolved_base || base_environment)
         raise CommandError, "Could not identify app service for deployment. Specify service via --service or config." unless resolved_service
 
-        initial_config = created ? wait_for_environment_config(environment, resolved_service) : nil
-        apply_and_verify_environment_edit!(environment, service_id: resolved_service, repo: repo, branch: branch, port: port, initial_config: initial_config)
+        create_environment!(environment, duplicate_from: resolved_base, service_id: resolved_service, branch: branch, port: port) if created
 
+        initial_config = created ? wait_for_environment_config(environment, resolved_service) : nil
+        return true if created && environment_config_matches?(initial_config, resolved_service, branch: branch, port: port)
+
+        apply_and_verify_environment_edit!(environment, service_id: resolved_service, repo: repo, branch: branch, port: port, initial_config: initial_config)
         true
       ensure
         restore_linked_environment(previous_env) if created && previous_env && previous_env != environment.to_s
@@ -106,20 +96,32 @@ module Switchyard
 
       private
 
-      def create_environment!(environment, duplicate_from:, existing_environments:)
-        base = duplicate_from if existing_environments.include?(duplicate_from.to_s)
-        base ||= "staging" if existing_environments.include?("staging")
-        base ||= "production" if existing_environments.include?("production")
-        base ||= existing_environments.first
+      def ssh_rails_command(environment, subcommand, *args, service: nil)
+        svc = service || @service || default_app_service(environment)
+        cmd = ["railway", "ssh", "--environment", environment.to_s]
+        cmd += ["--service", svc.to_s] if svc
+        cmd + ["--", "bin/rails", subcommand, *args]
+      end
 
+      def resolve_duplicate_base(duplicate_from, existing_environments)
+        return duplicate_from.to_s if existing_environments.include?(duplicate_from.to_s)
+        return "staging" if existing_environments.include?("staging")
+        return "production" if existing_environments.include?("production")
+
+        existing_environments.first
+      end
+
+      def create_environment!(environment, duplicate_from:, service_id: nil, branch: nil, port: nil)
         cmd = ["railway", "environment", "new", environment.to_s]
-        cmd += ["--duplicate", base.to_s] if base
+        cmd += ["--duplicate", duplicate_from.to_s] if duplicate_from
+        cmd += ["--service-config", service_id.to_s, "source.branch", branch.to_s] if service_id && branch
+        cmd += ["--service-config", service_id.to_s, "variables.PORT.value", port.to_s] if service_id && port
         cmd << "--json"
 
         stdout, status = runner.capture(*cmd)
         return if status&.success?
 
-        raise CommandError, "Failed to create Railway environment '#{environment}'#{" duplicating '#{base}'" if base}: #{stdout&.strip}"
+        raise CommandError, "Failed to create Railway environment '#{environment}'#{" duplicating '#{duplicate_from}'" if duplicate_from}: #{stdout&.strip}"
       end
 
       def wait_for_environment_config(environment, service_id)
@@ -190,7 +192,8 @@ module Switchyard
 
       def resolve_service_id(target_service, repo:, environment:, base_environment:)
         if target_service
-          matched = list_services(environment: environment).find do |s|
+          search_env = environment || base_environment
+          matched = list_services(environment: search_env).find do |s|
             s["id"] == target_service.to_s || s["name"] == target_service.to_s
           end
           return matched["id"] || matched["name"] if matched
@@ -249,6 +252,11 @@ module Switchyard
         end
       rescue StandardError
         nil
+      end
+
+      def default_app_service(environment)
+        matched = query_service(nil, environment: environment)
+        matched&.dig("name") || matched&.dig("id")
       end
 
       def find_app_service(target_repo = nil, environment: nil, base_environment: nil)

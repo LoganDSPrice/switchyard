@@ -10,6 +10,9 @@ module Switchyard
       class VariableNotFoundError < Error; end
 
       DATABASE_KEYS = %w[DATABASE_PUBLIC_URL DATABASE_URL].freeze
+      MAX_ENV_READY_ATTEMPTS = 5
+      MAX_EDIT_ATTEMPTS = 3
+      RETRY_DELAY_SECONDS = 2
 
       attr_reader :service
 
@@ -83,43 +86,30 @@ module Switchyard
       end
 
       def deploy_pr(environment, repo:, branch:, service: nil, base_environment: "staging", port: nil)
-        ensure_environment_exists!(environment, duplicate_from: base_environment)
-        resolved_service = resolve_service_id(
-          service || @service,
-          repo: repo,
-          environment: environment,
-          base_environment: base_environment
-        )
+        environments = list_environments
+        created = !environments.include?(environment.to_s)
+        previous_env = created ? current_linked_environment : nil
 
+        create_environment!(environment, duplicate_from: base_environment, existing_environments: environments) if created
+
+        resolved_service = resolve_service_id(service || @service, repo: repo, environment: environment, base_environment: base_environment)
         raise CommandError, "Could not identify app service for deployment. Specify service via --service or config." unless resolved_service
 
-        cancel_duplicate_deployment!(environment, resolved_service)
-
-        cmd = build_environment_edit_command(
-          environment,
-          service_id: resolved_service,
-          repo: repo,
-          branch: branch,
-          port: port
-        )
-
-        stdout, status = runner.capture(*cmd)
-        raise CommandError, "Failed to update environment '#{environment}' on Railway: #{stdout&.strip}" unless status&.success?
+        initial_config = created ? wait_for_environment_config(environment, resolved_service) : nil
+        apply_and_verify_environment_edit!(environment, service_id: resolved_service, repo: repo, branch: branch, port: port, initial_config: initial_config)
 
         true
+      ensure
+        restore_linked_environment(previous_env) if created && previous_env && previous_env != environment.to_s
       end
 
       private
 
-      def ensure_environment_exists!(environment, duplicate_from:)
-        environments = list_environments
-
-        return if environments.include?(environment.to_s)
-
-        base = duplicate_from if environments.include?(duplicate_from.to_s)
-        base ||= "staging" if environments.include?("staging")
-        base ||= "production" if environments.include?("production")
-        base ||= environments.first
+      def create_environment!(environment, duplicate_from:, existing_environments:)
+        base = duplicate_from if existing_environments.include?(duplicate_from.to_s)
+        base ||= "staging" if existing_environments.include?("staging")
+        base ||= "production" if existing_environments.include?("production")
+        base ||= existing_environments.first
 
         cmd = ["railway", "environment", "new", environment.to_s]
         cmd += ["--duplicate", base.to_s] if base
@@ -129,6 +119,77 @@ module Switchyard
         return if status&.success?
 
         raise CommandError, "Failed to create Railway environment '#{environment}'#{" duplicating '#{base}'" if base}: #{stdout&.strip}"
+      end
+
+      def wait_for_environment_config(environment, service_id)
+        MAX_ENV_READY_ATTEMPTS.times do |attempt|
+          config = fetch_environment_config(environment)
+          return config if config&.dig("services", service_id.to_s)
+
+          pause(RETRY_DELAY_SECONDS) if attempt < MAX_ENV_READY_ATTEMPTS - 1
+        end
+        nil
+      end
+
+      def apply_and_verify_environment_edit!(environment, service_id:, repo:, branch:, port:, initial_config: nil)
+        pre_config = initial_config
+
+        MAX_EDIT_ATTEMPTS.times do |attempt|
+          cancel_duplicate_deployment!(environment, service_id)
+          pre_config ||= fetch_environment_config(environment)
+          cmd = build_environment_edit_command(
+            environment,
+            service_id: service_id,
+            repo: repo,
+            branch: branch,
+            port: port,
+            env_config: pre_config
+          )
+
+          stdout, status = runner.capture(*cmd)
+          raise CommandError, "Failed to update environment '#{environment}' on Railway: #{stdout&.strip}" unless status&.success?
+
+          post_config = fetch_environment_config(environment)
+          return true if environment_config_matches?(post_config, service_id, branch: branch, port: port)
+
+          pre_config = post_config
+          pause(RETRY_DELAY_SECONDS) if attempt < MAX_EDIT_ATTEMPTS - 1
+        end
+
+        raise CommandError,
+              "Failed to verify environment '#{environment}' configuration on Railway (expected branch '#{branch}'#{", PORT=#{port}" if port})."
+      end
+
+      def environment_config_matches?(config, service_id, branch:, port:)
+        svc_cfg = config&.dig("services", service_id.to_s)
+        return false unless svc_cfg
+        return false unless svc_cfg.dig("source", "branch") == branch.to_s
+        return true unless port
+
+        current_port = svc_cfg.dig("variables", "PORT", "value") || svc_cfg.dig("variables", "PORT")
+        current_port.to_s == port.to_s
+      end
+
+      def current_linked_environment
+        stdout, status = runner.capture("railway", "status", "--json")
+        return nil unless status&.success?
+
+        parsed = parse_json_object(stdout)
+        parsed&.dig("environment", "name") || parsed&.dig("environment", "id")
+      rescue StandardError
+        nil
+      end
+
+      def restore_linked_environment(environment)
+        return unless environment
+
+        runner.capture("railway", "environment", "link", environment.to_s, "--json")
+      rescue StandardError
+        nil
+      end
+
+      def pause(seconds)
+        sleep(seconds)
       end
 
       def resolve_service_id(target_service, repo:, environment:, base_environment:)
@@ -145,18 +206,14 @@ module Switchyard
         matched&.dig("id") || matched&.dig("name")
       end
 
-      def build_environment_edit_command(environment, service_id:, repo:, branch:, port:)
+      def build_environment_edit_command(environment, service_id:, repo:, branch:, port:, env_config: nil)
         cmd = ["railway", "environment", "edit", "--environment", environment.to_s]
-        cmd += ["--service-config", service_id.to_s, "source.repo", repo.to_s] unless service_repo_connected?(environment, service_id, repo)
+        repo_connected = env_config&.dig("services", service_id.to_s, "source", "repo") == repo.to_s
+        cmd += ["--service-config", service_id.to_s, "source.repo", repo.to_s] unless repo_connected
         cmd += ["--service-config", service_id.to_s, "source.branch", branch.to_s]
         cmd += ["--service-config", service_id.to_s, "variables.PORT.value", port.to_s] if port
         cmd += ["-m", deploy_commit_message(environment, branch), "--json"]
         cmd
-      end
-
-      def service_repo_connected?(environment, service_id, repo)
-        config = fetch_environment_config(environment)
-        config&.dig("services", service_id.to_s, "source", "repo") == repo.to_s
       end
 
       def fetch_environment_config(environment)
@@ -240,21 +297,19 @@ module Switchyard
       end
 
       def parse_json_array(stdout)
-        json_str = stdout.to_s[/\[.*\]/m]
-        return [] unless json_str
-
-        parsed = JSON.parse(json_str)
-        parsed.is_a?(Array) ? parsed : []
-      rescue StandardError
-        []
+        parse_json_matching(stdout, /\[.*\]/m, Array) || []
       end
 
       def parse_json_object(stdout)
-        json_str = stdout.to_s[/\{.*\}/m]
+        parse_json_matching(stdout, /\{.*\}/m, Hash)
+      end
+
+      def parse_json_matching(stdout, pattern, expected_class)
+        json_str = stdout.to_s[pattern]
         return nil unless json_str
 
         parsed = JSON.parse(json_str)
-        parsed.is_a?(Hash) ? parsed : nil
+        parsed.is_a?(expected_class) ? parsed : nil
       rescue StandardError
         nil
       end

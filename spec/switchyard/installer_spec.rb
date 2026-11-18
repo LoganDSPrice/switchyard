@@ -72,8 +72,13 @@ RSpec.describe Switchyard::Installer do
       context "when github_action option is enabled" do
         subject(:installer) { described_class.new(destination: temp_dir, runner: runner, github_action: true) }
 
-        it "creates .github/workflows/switchyard-cleanup-pr.yml with RAILWAY_API_TOKEN, non-interactive link, and existence guard" do
+        it "auto-populates RAILWAY_PROJECT_ID when railway status returns a project ID" do
+          expect(runner).to receive(:capture).with(
+            "railway", "status", "--json"
+          ).once.and_return(['{"id":"proj-123","name":"MyApp"}', double(success?: true)])
+
           installer.install!
+          expect(installer.railway_project_id).to eq("proj-123")
 
           workflow_path = File.join(temp_dir, ".github", "workflows", "switchyard-cleanup-pr.yml")
           expect(File.exist?(workflow_path)).to be true
@@ -86,7 +91,7 @@ RSpec.describe Switchyard::Installer do
           expect(cleanup_step).not_to be_nil
           expect(cleanup_step["env"]).to eq(
             "RAILWAY_API_TOKEN" => "${{ secrets.RAILWAY_API_TOKEN }}",
-            "RAILWAY_PROJECT_ID" => "${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID }}"
+            "RAILWAY_PROJECT_ID" => "${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID || 'proj-123' }}"
           )
           expect(content).not_to include("RAILWAY_TOKEN:")
           expect(content).not_to include("secrets.RAILWAY_TOKEN")
@@ -100,6 +105,23 @@ RSpec.describe Switchyard::Installer do
           expect(run_script).to include("exit 0")
           expect(run_script).to include('railway environment delete "$ENV_NAME" --yes')
           expect(installer.github_action_generated?).to be true
+        end
+
+        it "falls back to GitHub secret/var expression when railway status is unlinked" do
+          expect(runner).to receive(:capture).with(
+            "railway", "status", "--json"
+          ).once.and_return(["Project not found", double(success?: false)])
+
+          installer.install!
+          expect(installer.railway_project_id).to be_nil
+
+          workflow_path = File.join(temp_dir, ".github", "workflows", "switchyard-cleanup-pr.yml")
+          parsed = YAML.safe_load_file(workflow_path)
+          cleanup_step = parsed.dig("jobs", "cleanup", "steps").find { |step| step["name"] == "Decommission Railway PR Environment" }
+          expect(cleanup_step["env"]).to eq(
+            "RAILWAY_API_TOKEN" => "${{ secrets.RAILWAY_API_TOKEN }}",
+            "RAILWAY_PROJECT_ID" => "${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID }}"
+          )
         end
       end
 
@@ -242,6 +264,48 @@ RSpec.describe Switchyard::Installer do
 
           expect(installer.railway_project_id).to be_nil
         end
+      end
+    end
+
+    describe "#link_project!" do
+      subject(:installer) { described_class.new(destination: temp_dir, runner: runner, github_action: true) }
+
+      before do
+        FileUtils.mkdir_p(File.join(temp_dir, "config"))
+        File.write(File.join(temp_dir, "config", "database.yml"), "development:\n  database: test_dev\n")
+        FileUtils.mkdir_p(File.join(temp_dir, "bin"))
+      end
+
+      it "runs railway link, refreshes railway_project_id, and regenerates the cleanup workflow when linking succeeds" do
+        expect(runner).to receive(:capture).with("railway", "status", "--json").and_return(
+          ["Project not found", double(success?: false)],
+          ['{"id":"proj-linked","name":"MyApp"}', double(success?: true)]
+        )
+        expect(runner).to receive(:system).with("railway", "link").and_return(true)
+
+        installer.install!
+        expect(installer.railway_project_id).to be_nil
+
+        expect(installer.link_project!).to be(true)
+        expect(installer.railway_project_id).to eq("proj-linked")
+
+        workflow_path = File.join(temp_dir, ".github", "workflows", "switchyard-cleanup-pr.yml")
+        parsed = YAML.safe_load_file(workflow_path)
+        cleanup_step = parsed.dig("jobs", "cleanup", "steps").find { |step| step["name"] == "Decommission Railway PR Environment" }
+        expect(cleanup_step["env"]["RAILWAY_PROJECT_ID"]).to eq(
+          "${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID || 'proj-linked' }}"
+        )
+      end
+
+      it "returns false and leaves workflow unchanged when railway link fails" do
+        expect(runner).to receive(:capture).with("railway", "status", "--json").once.and_return(
+          ["Project not found", double(success?: false)]
+        )
+        expect(runner).to receive(:system).with("railway", "link").and_return(false)
+
+        installer.install!
+        expect(installer.link_project!).to be(false)
+        expect(installer.railway_project_id).to be_nil
       end
     end
 

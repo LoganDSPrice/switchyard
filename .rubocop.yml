@@ -42,6 +42,7 @@ Naming/PredicateMethod:
     - deploy_pr
     - run!
     - install!
+    - link_project!
 
 Style/OptionalBooleanParameter:
   Exclude:

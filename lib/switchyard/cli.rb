@@ -189,29 +189,8 @@ module Switchyard
       puts "Generated configuration: .switchyard.yml"
 
       if installer.github_action_generated?
-        puts "🤖 Generated .github/workflows/switchyard-cleanup-pr.yml!"
-        puts "   To enable automated cleanup:"
-        puts "   1. On Railway: Create an Account Token at:"
-        puts "      👉 #{Installer::RAILWAY_ACCOUNT_TOKENS_URL} (Account Settings → Tokens)"
-        puts "      • Scope: Select 'No workspace' (Account Token)"
-        puts "      • Name suggestion: 'GitHub Actions - PR Cleanup'"
-        puts "      ⚠️  Do NOT create a Project Token (cannot delete PR environments)"
-        puts "         or select a specific workspace (@railway/cli rejects workspace-scoped tokens)."
-        if (secrets_url = installer.github_secrets_url)
-          puts "   2. On GitHub: Add the repository secrets at:"
-          puts "      👉 #{secrets_url}"
-          puts "      • Click 'New repository secret' for each:"
-        else
-          puts "   2. On GitHub: Settings → Secrets and variables → Actions → New repository secret"
-        end
-        puts "      • Name: RAILWAY_API_TOKEN"
-        puts "        Secret: [Paste the copied Account Token]"
-        puts "      • Name: RAILWAY_PROJECT_ID"
-        if (project_id = installer.railway_project_id)
-          puts "        Secret: #{project_id}"
-        else
-          puts "        Secret: [Your Railway project ID from `railway status --json`]"
-        end
+        project_id = resolve_github_action_project_id(installer)
+        print_github_action_instructions(installer, project_id)
       end
 
       if installer.git_safe_enabled?
@@ -260,6 +239,47 @@ module Switchyard
         say "🌱 Copying database from #{source} into #{env}..."
         restore(source, env)
       end
+    end
+
+    def resolve_github_action_project_id(installer)
+      project_id = installer.railway_project_id
+      return project_id if project_id || !$stdin.tty?
+
+      prompt = "This repo isn't linked to a Railway project yet. Run `railway link` now to auto-populate RAILWAY_PROJECT_ID? (y/N)"
+      return nil unless yes?(prompt)
+
+      unless installer.link_project!
+        puts "⚠️  Could not link a Railway project (run `railway login && railway link`, then re-run `switchyard install --github-action`)."
+      end
+
+      installer.railway_project_id
+    end
+
+    def print_github_action_instructions(installer, project_id)
+      puts "🤖 Generated .github/workflows/switchyard-cleanup-pr.yml!"
+      puts "   ✓ Auto-populated RAILWAY_PROJECT_ID (#{project_id}) in the workflow." if project_id
+      puts "   To enable automated cleanup:"
+      puts "   1. On Railway: Create an Account Token at:"
+      puts "      👉 #{Installer::RAILWAY_ACCOUNT_TOKENS_URL} (Account Settings → Tokens)"
+      puts "      • Scope: Select 'No workspace' (Account Token)"
+      puts "      • Name suggestion: 'GitHub Actions - PR Cleanup'"
+      puts "      ⚠️  Do NOT create a Project Token (cannot delete PR environments)"
+      puts "         or select a specific workspace (@railway/cli rejects workspace-scoped tokens)."
+      if (secrets_url = installer.github_secrets_url)
+        secret_label = project_id ? "repository secret" : "repository secrets"
+        action_hint = project_id ? "Click 'New repository secret':" : "Click 'New repository secret' for each:"
+        puts "   2. On GitHub: Add the #{secret_label} at:"
+        puts "      👉 #{secrets_url}"
+        puts "      • #{action_hint}"
+      else
+        puts "   2. On GitHub: Settings → Secrets and variables → Actions → New repository secret"
+      end
+      puts "      • Name: RAILWAY_API_TOKEN"
+      puts "        Secret: [Paste the copied Account Token]"
+      return if project_id
+
+      puts "      • Name: RAILWAY_PROJECT_ID"
+      puts "        Secret: [Your Railway project ID from `railway status --json`, or run `railway link` and re-run `switchyard install --github-action`]"
     end
   end
 end

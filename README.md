@@ -64,7 +64,7 @@ bundle exec switchyard install
 >    - **Important:** Do **not** create a Project Token (scoped to one environment and cannot see/delete `pr-*` environments) or select a specific workspace (`@railway/cli` rejects workspace-scoped tokens).
 > 2. In GitHub: Go to your repo's **Settings** → **Secrets and variables** → **Actions** → **New repository secret** and add:
 >    - `RAILWAY_API_TOKEN`: Paste the Account Token value.
->    - `RAILWAY_PROJECT_ID`: Your Railway project ID (from `railway status --json`; also accepted as a repository Actions variable).
+>    - *(If your local repo isn't linked yet during install, Switchyard will offer to run `railway link` for you; otherwise add `RAILWAY_PROJECT_ID` from `railway status --json` or run `railway link` and re-run `switchyard install --github-action`.)*
 
 This creates executable binstubs in your Rails app's `bin/`:
 - `bin/switchyard`

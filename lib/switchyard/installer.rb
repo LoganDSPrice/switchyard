@@ -152,7 +152,7 @@ module Switchyard
             - name: Decommission Railway PR Environment
               env:
                 RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-                RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID }}
+                RAILWAY_PROJECT_ID: %<project_id_expr>s
               run: |
                 if [ -z "$RAILWAY_API_TOKEN" ]; then
                   echo "::error::RAILWAY_API_TOKEN secret is not set. Create an Account Token (with 'No workspace' selected) at #{RAILWAY_ACCOUNT_TOKENS_URL}."
@@ -169,7 +169,7 @@ module Switchyard
                 railway link --project "$RAILWAY_PROJECT_ID" --environment production
 
                 ENV_LIST_JSON="$(railway environment list --json)"
-                if ! printf '%s\\n' "$ENV_LIST_JSON" | jq -e --arg name "$ENV_NAME" '(if type == "array" then . else (.environments // []) end)[] | select(.name == $name)' > /dev/null; then
+                if ! printf '%%s\\n' "$ENV_LIST_JSON" | jq -e --arg name "$ENV_NAME" '(if type == "array" then . else (.environments // []) end)[] | select(.name == $name)' > /dev/null; then
                   echo "No Railway environment '$ENV_NAME' found; skipping cleanup."
                   exit 0
                 fi
@@ -216,6 +216,26 @@ module Switchyard
     end
 
     def railway_project_id
+      return @railway_project_id if defined?(@railway_project_id)
+
+      @railway_project_id = fetch_railway_project_id
+    end
+
+    def link_project!
+      return false unless runner.system("railway", "link")
+
+      remove_instance_variable(:@railway_project_id) if defined?(@railway_project_id)
+      return false unless railway_project_id
+
+      generate_github_action! if github_action
+      true
+    end
+
+    private
+
+    attr_reader :destination, :runner, :git_safe, :github_action
+
+    def fetch_railway_project_id
       stdout, status = runner.capture("railway", "status", "--json")
       return unless status&.success?
 
@@ -227,10 +247,6 @@ module Switchyard
     rescue StandardError
       nil
     end
-
-    private
-
-    attr_reader :destination, :runner, :git_safe, :github_action
 
     def validate_rails_directory!
       has_db_config = File.exist?(File.join(destination, "config", "database.yml"))
@@ -272,8 +288,18 @@ module Switchyard
       workflows_dir = File.join(destination, ".github", "workflows")
       FileUtils.mkdir_p(workflows_dir)
 
-      File.write(File.join(workflows_dir, "switchyard-cleanup-pr.yml"), GITHUB_ACTION_TEMPLATE)
+      File.write(File.join(workflows_dir, "switchyard-cleanup-pr.yml"), github_action_workflow)
       @github_action_generated = true
+    end
+
+    def github_action_workflow(project_id: railway_project_id)
+      project_id_expr = if project_id.to_s.match?(/\A[\w-]+\z/)
+                          "${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID || '#{project_id}' }}"
+                        else
+                          "${{ secrets.RAILWAY_PROJECT_ID || vars.RAILWAY_PROJECT_ID }}"
+                        end
+
+      format(GITHUB_ACTION_TEMPLATE, project_id_expr: project_id_expr)
     end
   end
 end

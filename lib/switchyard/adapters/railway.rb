@@ -86,9 +86,10 @@ module Switchyard
       end
 
       def deploy_pr(environment, repo:, branch:, service: nil, base_environment: "staging", port: nil)
-        environments = list_environments
+        env_entries = fetch_environments
+        environments = env_entries.map { |e| e["name"] }
         created = !environments.include?(environment.to_s)
-        previous_env = created ? current_linked_environment : nil
+        previous_env = created ? linked_environment_name(env_entries) : nil
 
         create_environment!(environment, duplicate_from: base_environment, existing_environments: environments) if created
 
@@ -170,14 +171,9 @@ module Switchyard
         current_port.to_s == port.to_s
       end
 
-      def current_linked_environment
-        stdout, status = runner.capture("railway", "status", "--json")
-        return nil unless status&.success?
-
-        parsed = parse_json_object(stdout)
-        parsed&.dig("environment", "name") || parsed&.dig("environment", "id")
-      rescue StandardError
-        nil
+      def linked_environment_name(env_entries)
+        linked = env_entries.find { |e| e["isLinked"] == true }
+        linked&.dig("name") || linked&.dig("id")
       end
 
       def restore_linked_environment(environment)
@@ -287,13 +283,17 @@ module Switchyard
         []
       end
 
-      def list_environments
+      def fetch_environments
         stdout, status = runner.capture("railway", "environment", "list", "--json")
         return [] unless status&.success?
 
-        parse_json_array(stdout).map { |e| e["name"] }
+        parse_json_array(stdout)
       rescue StandardError
         []
+      end
+
+      def list_environments
+        fetch_environments.map { |e| e["name"] }
       end
 
       def parse_json_array(stdout)

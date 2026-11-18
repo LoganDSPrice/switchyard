@@ -275,25 +275,27 @@ RSpec.describe Switchyard::Adapters::Railway do
       JSON
     end
 
-    let(:linked_production_status_json) do
-      '{"project":{"id":"proj-1"},"environment":{"id":"env-1","name":"production"}}'
+    let(:environments_json_linked) do
+      <<~JSON
+        [
+          { "id": "env-1", "name": "production", "isLinked": true },
+          { "id": "env-2", "name": "staging", "isLinked": false }
+        ]
+      JSON
     end
 
     before do
       allow(runner).to receive(:capture).with("railway", "deployment", "list", any_args).and_return(["[]", double(success?: true)])
-      allow(runner).to receive(:capture).with("railway", "status", "--json").and_return(["", double(success?: false)])
       allow(adapter).to receive(:pause)
     end
 
     context "when PR environment does not exist yet" do
-      it "provisions environment non-interactively, verifies source.branch and PORT, and restores the prior linked environment" do
+      it "provisions environment non-interactively, verifies source.branch and PORT, and restores the prior linked environment from environment list" do
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
-        ).and_return([environments_json, double(success?: true)])
+        ).and_return([environments_json_linked, double(success?: true)])
 
-        expect(runner).to receive(:capture).with(
-          "railway", "status", "--json"
-        ).and_return([linked_production_status_json, double(success?: true)])
+        expect(runner).not_to receive(:capture).with("railway", "status", any_args)
 
         expect(runner).to receive(:capture).with(
           "railway", "environment", "new", "pr-157", "--duplicate", "staging", "--json"
@@ -340,11 +342,7 @@ RSpec.describe Switchyard::Adapters::Railway do
       it "waits for async environment duplication and retries edit if post-edit config still shows the base branch" do
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
-        ).and_return([environments_json, double(success?: true)])
-
-        expect(runner).to receive(:capture).with(
-          "railway", "status", "--json"
-        ).and_return([linked_production_status_json, double(success?: true)])
+        ).and_return([environments_json_linked, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
           "railway", "environment", "new", "pr-157", "--duplicate", "production", "--json"
@@ -392,11 +390,7 @@ RSpec.describe Switchyard::Adapters::Railway do
       it "raises CommandError and still restores the prior linked environment when post-edit verification never shows the PR branch" do
         expect(runner).to receive(:capture).with(
           "railway", "environment", "list", "--json"
-        ).and_return([environments_json, double(success?: true)])
-
-        expect(runner).to receive(:capture).with(
-          "railway", "status", "--json"
-        ).and_return([linked_production_status_json, double(success?: true)])
+        ).and_return([environments_json_linked, double(success?: true)])
 
         expect(runner).to receive(:capture).with(
           "railway", "environment", "new", "pr-157", "--duplicate", "staging", "--json"
@@ -731,9 +725,7 @@ RSpec.describe Switchyard::Adapters::Railway do
           captured_commands << args
           case args[0..2]
           when %w[railway environment list]
-            [environments_json, double(success?: true)]
-          when %w[railway status]
-            [linked_production_status_json, double(success?: true)]
+            [environments_json_linked, double(success?: true)]
           when %w[railway environment new]
             ['{"name":"pr-170"}', double(success?: true)]
           when %w[railway service list]
